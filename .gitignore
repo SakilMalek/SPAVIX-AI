@@ -79,6 +79,11 @@ PHASE_3_INDEXES.sql
 PHASE_3_QUICK_START.md
 progress.txt
 
+# Keep Gemini files (important for project)
+!gemini_image_generate.py
+!gemini_shopping_list.py
+!gemini_config.json
+
 # Testing
 coverage/
 .nyc_output/

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/use-auth";
 
 declare global {
   interface Window {
@@ -13,6 +14,7 @@ declare global {
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
+  const { refreshAuth } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +63,7 @@ export default function LoginPage() {
         localStorage.setItem("userName", data.user.name);
       }
       toast.success("Logged in successfully!");
+      await refreshAuth();
       setLocation("/dashboard");
     } catch (error: any) {
       toast.error(error.message || "Login failed");

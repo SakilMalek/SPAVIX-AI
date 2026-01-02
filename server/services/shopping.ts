@@ -1,12 +1,8 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const SHOPPING_LIST_SCRIPT_PATH = path.join(__dirname, '..', '..', 'gemini_shopping_list.py');
+const SHOPPING_LIST_SCRIPT_PATH = path.join(process.cwd(), 'gemini_shopping_list.py');
 
 export class ShoppingListService {
   static async generateShoppingList(beforeImageUrl: string, afterImageUrl: string): Promise<string> {

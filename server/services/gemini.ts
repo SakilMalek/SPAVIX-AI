@@ -1,14 +1,10 @@
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Get the correct path to the Python script
-// __dirname = dist/services, go up 2 levels to dist, then to src where the script is located
-const GEMINI_SCRIPT_PATH = path.join(__dirname, '..', '..', 'src', 'gemini_image_generate.py');
+// In production, the script is at the root directory
+const GEMINI_SCRIPT_PATH = path.join(process.cwd(), 'gemini_image_generate.py');
 
 export class GeminiImageService {
   static async generateImage(prompt: string, inputImageUrl: string): Promise<Buffer> {
@@ -22,13 +18,30 @@ export class GeminiImageService {
         fs.mkdirSync(outputDir, { recursive: true });
       }
 
-      // Generate unique filenames
+      // Detect image format from data URL
+      let imageExtension = 'jpg';
+      if (inputImageUrl.includes('data:image/png')) {
+        imageExtension = 'png';
+      } else if (inputImageUrl.includes('data:image/gif')) {
+        imageExtension = 'gif';
+      } else if (inputImageUrl.includes('data:image/webp')) {
+        imageExtension = 'webp';
+      } else if (inputImageUrl.includes('data:image/jpeg')) {
+        imageExtension = 'jpg';
+      }
+
+      console.log(`📸 Detected image format: ${imageExtension}`);
+
+      // Generate unique filenames with correct extension
       const timestamp = Date.now();
-      const inputPath = path.join(outputDir, `input_${timestamp}.jpg`);
+      const inputPath = path.join(outputDir, `input_${timestamp}.${imageExtension}`);
       const outputPath = path.join(outputDir, `output_${timestamp}.png`);
 
       // Convert base64 input image to file
       await this.saveBase64Image(inputImageUrl, inputPath);
+
+      // Small delay to ensure file is fully written before Python script reads it
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Run the Python script with input image
       const imageBuffer = await this.runGeminiGeneration(prompt, inputPath, outputPath);
@@ -50,15 +63,37 @@ export class GeminiImageService {
     const base64Data = base64Url.replace(/^data:image\/\w+;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
     
+    // Validate image size - Gemini API requires minimum 10KB
+    const minImageSize = 10000; // 10KB
+    if (imageBuffer.length < minImageSize) {
+      console.error(`❌ Image too small: ${imageBuffer.length} bytes (minimum: ${minImageSize} bytes)`);
+      throw new Error(`Image is too small (${imageBuffer.length} bytes). Minimum required: ${minImageSize} bytes. This usually means the image is corrupted or over-compressed. Try uploading a higher quality image.`);
+    }
+    
     fs.writeFileSync(outputPath, imageBuffer);
-    console.log(`Saved input image to: ${outputPath}`);
+    console.log(`✅ Saved input image to: ${outputPath} (${imageBuffer.length} bytes)`);
   }
 
   private static async runGeminiGeneration(prompt: string, inputPath: string, outputPath: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const apiKey = process.env.GEMINI_API_KEY;
+      // Try to load API key from config file first, then fall back to environment
+      let apiKey = process.env.GEMINI_API_KEY;
+      
+      const configPath = path.join(process.cwd(), 'gemini_config.json');
+      if (fs.existsSync(configPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+          if (config.GEMINI_API_KEY) {
+            apiKey = config.GEMINI_API_KEY;
+            console.log('[Gemini] Loaded API key from gemini_config.json');
+          }
+        } catch (error) {
+          console.warn('[Gemini] Failed to read config file, using environment variable');
+        }
+      }
+      
       if (!apiKey) {
-        reject(new Error('GEMINI_API_KEY not found in environment variables'));
+        reject(new Error('GEMINI_API_KEY not found in gemini_config.json or environment variables'));
         return;
       }
       

@@ -19,24 +19,14 @@ def generate_image(prompt: str, input_image_path: str, output_path: str):
     Takes the input room image and transforms it based on the prompt
     """
     try:
-        # Read API key from config file (priority over environment variable)
-        api_key = None
-        config_path = os.path.join(os.path.dirname(__file__), "gemini_config.json")
-        
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                api_key = config.get("GEMINI_API_KEY")
-                print(f"[DEBUG] Loaded API key from config file: {api_key[:20] if api_key else 'NOT FOUND'}...", file=sys.stderr)
-        
-        # Fallback to environment variable if config file doesn't have it
-        if not api_key:
-            api_key = os.environ.get("GEMINI_API_KEY")
-            print(f"[DEBUG] Loaded API key from environment: {api_key[:20] if api_key else 'NOT FOUND'}...", file=sys.stderr)
+        # Load API key from environment variable only (secure method)
+        api_key = os.environ.get("GEMINI_API_KEY")
         
         if not api_key:
-            print("❌ GEMINI_API_KEY not found in config file or environment", file=sys.stderr)
+            print("❌ GEMINI_API_KEY environment variable not set", file=sys.stderr)
             sys.exit(1)
+        
+        print(f"[DEBUG] Loaded API key from environment: {api_key[:20]}...", file=sys.stderr)
 
         print(f"🚀 Using Gemini 2.5 Flash Image Preview with REST API", file=sys.stderr)
         print(f"📝 Prompt: {prompt[:100]}...", file=sys.stderr)

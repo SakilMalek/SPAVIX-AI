@@ -12,7 +12,7 @@ python3 --version
 
 echo ""
 echo "Step 2: Installing Python dependencies..."
-python3 -m pip install --upgrade pip
+python3 -m pip install --upgrade pip setuptools wheel
 python3 -m pip install -r requirements.txt
 
 echo ""

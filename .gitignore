@@ -98,10 +98,8 @@ LANDING_PAGE_SETUP.md
 LOGIN_FIX_SUMMARY.md
 LOGIN_SYSTEM_STATUS.md
 
-# Keep Gemini files (important for project)
-!gemini_image_generate.py
-!gemini_shopping_list.py
-!gemini_config.json
+# Gemini config (contains sensitive data)
+gemini_config.json
 
 # Testing
 coverage/

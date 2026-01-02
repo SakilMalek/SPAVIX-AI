@@ -1,17 +1,37 @@
 #!/bin/bash
 set -e
 
-echo "Installing Python dependencies..."
+echo "=========================================="
+echo "SPAVIX Build Script - $(date)"
+echo "=========================================="
+
+echo ""
+echo "Step 1: Python Setup"
+echo "Python version:"
+python3 --version
+
+echo ""
+echo "Step 2: Installing Python dependencies..."
 python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
 
-echo "Verifying Python packages..."
-python3 -m pip list | grep -E "google-genai|requests|Pillow|python-dotenv"
+echo ""
+echo "Step 3: Verifying Python packages..."
+python3 -c "import sys; print('Python executable:', sys.executable)"
+python3 -c "import requests; print('✓ requests installed')"
+python3 -c "import google.genai; print('✓ google-genai installed')"
+python3 -c "import PIL; print('✓ Pillow installed')"
+python3 -c "import dotenv; print('✓ python-dotenv installed')"
 
-echo "Installing Node dependencies..."
+echo ""
+echo "Step 4: Installing Node dependencies..."
 npm install
 
-echo "Building application..."
+echo ""
+echo "Step 5: Building application..."
 npm run build
 
-echo "Build complete!"
+echo ""
+echo "=========================================="
+echo "Build complete! $(date)"
+echo "=========================================="

@@ -31,11 +31,31 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use(vite.middlewares);
 
+  // Serve attached_assets folder (gallery images, etc.) in development
+  const assetsPath = path.resolve(import.meta.dirname, "..", "attached_assets");
+  if (fs.existsSync(assetsPath)) {
+    app.use("/attached_assets", (req, res, next) => {
+      const filePath = path.join(assetsPath, req.path);
+      // Security: prevent directory traversal
+      if (!filePath.startsWith(assetsPath)) {
+        return res.status(403).send("Forbidden");
+      }
+      res.sendFile(filePath, (err) => {
+        if (err) next();
+      });
+    });
+  }
+
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
     // Skip API routes - let them be handled by the API middleware
     if (url.startsWith("/api")) {
+      return next();
+    }
+
+    // Skip attached_assets routes - they're already handled
+    if (url.startsWith("/attached_assets")) {
       return next();
     }
 

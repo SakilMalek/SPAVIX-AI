@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
 Gemini Image Generation Script - Virtual Interior Designer
-Uses google-genai SDK with Gemini 2.5 Flash Image for img2img transformation
-Based on Nano Banana Hackathon reference implementation
+Uses Gemini 2.5 Flash for img2img transformation via REST API
 """
 
 import argparse
 import os
 import sys
-import time
-from google import genai
-from google.genai import types
+import json
+import base64
+import requests
+from io import BytesIO
 
 
 def generate_image(prompt: str, input_image_path: str, output_path: str):
     """
-    Generate an image using Gemini 2.5 Flash Image (img2img)
+    Generate an image using Gemini 2.5 Flash (img2img)
     Takes the input room image and transforms it based on the prompt
     """
     try:
@@ -24,7 +24,6 @@ def generate_image(prompt: str, input_image_path: str, output_path: str):
         config_path = os.path.join(os.path.dirname(__file__), "gemini_config.json")
         
         if os.path.exists(config_path):
-            import json
             with open(config_path, 'r') as f:
                 config = json.load(f)
                 api_key = config.get("GEMINI_API_KEY")
@@ -39,75 +38,217 @@ def generate_image(prompt: str, input_image_path: str, output_path: str):
             print("❌ GEMINI_API_KEY not found in config file or environment", file=sys.stderr)
             sys.exit(1)
 
-        print(f"🚀 Initializing Gemini client with API key: {api_key[:20]}...", file=sys.stderr)
-        client = genai.Client(api_key=api_key)
-
-        # Use Gemini 2.5 Flash Image Preview (same as Kaggle)
-        model = "gemini-2.5-flash-image-preview"
-        print(f"📝 Model: {model}", file=sys.stderr)
-        print(f"📷 Input image: {input_image_path}", file=sys.stderr)
+        print(f"🚀 Using Gemini 2.5 Flash Image Preview with REST API", file=sys.stderr)
         print(f"📝 Prompt: {prompt[:100]}...", file=sys.stderr)
 
-        # Load the "Before" image for img2img transformation
+        # Load the input image
         if not os.path.exists(input_image_path):
             print(f"❌ Input image not found: {input_image_path}", file=sys.stderr)
             sys.exit(1)
 
-        # Load as PIL Image (Kaggle approach)
-        from PIL import Image
-        input_image = Image.open(input_image_path)
+        # Read and encode image as base64
+        with open(input_image_path, 'rb') as f:
+            image_data = f.read()
         
-        print(f"✅ Loaded input image: {input_image.size}", file=sys.stderr)
+        # Validate image data
+        if len(image_data) == 0:
+            print(f"❌ Input image is empty: {input_image_path}", file=sys.stderr)
+            sys.exit(1)
+        
+        # Gemini API requires images to be at least 10KB for reliable processing
+        min_image_size = 10000  # 10KB minimum
+        if len(image_data) < min_image_size:
+            print(f"❌ Input image is too small ({len(image_data)} bytes). Minimum required: {min_image_size} bytes", file=sys.stderr)
+            print(f"   This can happen if the image is corrupted or too compressed.", file=sys.stderr)
+            sys.exit(1)
+        
+        # Check image magic bytes to validate format
+        if image_data[:3] == b'\xff\xd8\xff':
+            media_type = 'image/jpeg'
+        elif image_data[:8] == b'\x89PNG\r\n\x1a\n':
+            media_type = 'image/png'
+        elif image_data[:6] == b'GIF87a' or image_data[:6] == b'GIF89a':
+            media_type = 'image/gif'
+        elif image_data[:4] == b'RIFF' and image_data[8:12] == b'WEBP':
+            media_type = 'image/webp'
+        else:
+            # Fallback to file extension
+            if input_image_path.lower().endswith('.png'):
+                media_type = 'image/png'
+            elif input_image_path.lower().endswith('.gif'):
+                media_type = 'image/gif'
+            elif input_image_path.lower().endswith('.webp'):
+                media_type = 'image/webp'
+            else:
+                media_type = 'image/jpeg'
+            print(f"⚠️  Warning: Could not detect image format from magic bytes, using {media_type}", file=sys.stderr)
+        
+        image_base64 = base64.standard_b64encode(image_data).decode('utf-8')
+        
+        print(f"✅ Loaded input image: {len(image_data)} bytes, type: {media_type}", file=sys.stderr)
+        print(f"📏 Base64 encoded size: {len(image_base64)} bytes", file=sys.stderr)
 
-        # Generate content with IMAGE response modality (img2img)
-        # Use Kaggle's simpler approach: pass PIL Image directly
+        # Call Gemini API via REST
         print(f"⏳ Generating transformed image...", file=sys.stderr)
         
-        response = client.models.generate_content(
-            model=model,
-            contents=[
-                prompt,
-                input_image  # Pass PIL Image directly (Kaggle style)
+        # Use gemini-2.5-flash-image-preview for image generation
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key={api_key}"
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "text": prompt
+                        },
+                        {
+                            "inlineData": {
+                                "mimeType": media_type,
+                                "data": image_base64
+                            }
+                        }
+                    ]
+                }
             ],
-            config=types.GenerateContentConfig(
-                response_modalities=['IMAGE']
-            )
-        )
-
-        # Extract images from response (hackathon approach)
+            "generationConfig": {
+                "responseModalities": ["IMAGE"],
+                "temperature": 0.7,
+                "topP": 0.95,
+                "topK": 40
+            },
+            "safetySettings": [
+                {
+                    "category": "HARM_CATEGORY_HARASSMENT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_HATE_SPEECH",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE"
+                }
+            ]
+        }
+        
+        # Retry logic for API calls
+        max_retries = 3
+        retry_count = 0
+        response = None
+        
+        while retry_count < max_retries:
+            try:
+                response = requests.post(api_url, json=payload, headers=headers, timeout=120)
+                print(f"📊 API Response Status: {response.status_code}", file=sys.stderr)
+                
+                if response.status_code == 200:
+                    break  # Success, exit retry loop
+                elif response.status_code == 429:
+                    # Rate limited, retry with backoff
+                    retry_count += 1
+                    if retry_count < max_retries:
+                        wait_time = 2 ** retry_count  # Exponential backoff: 2s, 4s, 8s
+                        print(f"⏳ Rate limited (429). Retrying in {wait_time}s... (attempt {retry_count}/{max_retries})", file=sys.stderr)
+                        import time
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        error_text = response.text
+                        print(f"❌ API Error (Rate Limited): {error_text}", file=sys.stderr)
+                        sys.exit(1)
+                else:
+                    error_text = response.text
+                    print(f"❌ API Error ({response.status_code}): {error_text}", file=sys.stderr)
+                    sys.exit(1)
+            except requests.exceptions.Timeout:
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = 2 ** retry_count
+                    print(f"⏳ Request timeout. Retrying in {wait_time}s... (attempt {retry_count}/{max_retries})", file=sys.stderr)
+                    import time
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print("❌ Request timeout - API took too long to respond", file=sys.stderr)
+                    sys.exit(1)
+            except requests.exceptions.RequestException as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = 2 ** retry_count
+                    print(f"⏳ Network error: {str(e)}. Retrying in {wait_time}s... (attempt {retry_count}/{max_retries})", file=sys.stderr)
+                    import time
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"❌ Network error: {str(e)}", file=sys.stderr)
+                    sys.exit(1)
+        
+        if response is None or response.status_code != 200:
+            print("❌ Failed to get valid response from API after retries", file=sys.stderr)
+            sys.exit(1)
+        
+        response_json = response.json()
+        
+        # Extract image from response
         image_saved = False
         
-        if response and hasattr(response, 'candidates'):
-            for candidate in response.candidates:
-                if hasattr(candidate, 'content') and candidate.content:
-                    if hasattr(candidate.content, 'parts'):
-                        for part in candidate.content.parts:
-                            if hasattr(part, 'inline_data') and part.inline_data:
-                                if hasattr(part.inline_data, 'data') and part.inline_data.data:
-                                    # Save the image
-                                    with open(output_path, "wb") as f:
-                                        f.write(part.inline_data.data)
-                                    
-                                    print(f"✅ Image saved to: {output_path}", file=sys.stderr)
-                                    image_saved = True
-                                    break
+        # Check for finish reason
+        if 'candidates' in response_json and response_json['candidates']:
+            for candidate in response_json['candidates']:
+                finish_reason = candidate.get('finishReason', 'UNKNOWN')
+                print(f"📋 Candidate finish reason: {finish_reason}", file=sys.stderr)
+                
+                if finish_reason == 'NO_IMAGE':
+                    print("⚠️  API returned NO_IMAGE - model may have rejected the request", file=sys.stderr)
+                    print("   This can happen due to safety filters or model limitations", file=sys.stderr)
+                    print(f"   Full response: {json.dumps(response_json, indent=2)}", file=sys.stderr)
+                    sys.exit(1)
+                
+                if 'content' in candidate and 'parts' in candidate['content']:
+                    for part in candidate['content']['parts']:
+                        if 'inlineData' in part:
+                            image_data_b64 = part['inlineData'].get('data')
+                            if image_data_b64:
+                                # Decode base64 and save
+                                image_bytes = base64.standard_b64decode(image_data_b64)
+                                with open(output_path, 'wb') as f:
+                                    f.write(image_bytes)
+                                
+                                print(f"✅ Image saved to: {output_path} ({len(image_bytes)} bytes)", file=sys.stderr)
+                                image_saved = True
+                                break
+                        elif 'text' in part:
+                            # Sometimes the API returns text instead of image
+                            print(f"⚠️  API returned text instead of image: {part['text'][:100]}", file=sys.stderr)
                     if image_saved:
                         break
-
+                if image_saved:
+                    break
+        
         if not image_saved:
-            print("❌ No image data received from Gemini", file=sys.stderr)
+            print("❌ No image data received from Gemini API", file=sys.stderr)
+            print(f"   Response: {json.dumps(response_json, indent=2)[:500]}", file=sys.stderr)
             sys.exit(1)
 
+    except requests.exceptions.Timeout:
+        print("❌ Request timeout - API took too long to respond", file=sys.stderr)
+        sys.exit(1)
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Network error: {str(e)}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         error_msg = str(e)
         print(f"❌ Error: {error_msg}", file=sys.stderr)
-        
-        # Check if it's a quota/rate limit error
-        if "RESOURCE_EXHAUSTED" in error_msg or "429" in error_msg:
-            print("⚠️  Gemini API quota exceeded. This happens because:", file=sys.stderr)
-            print("   - Free tier has strict rate limits (2-5 requests/minute)", file=sys.stderr)
-            print("   - Kaggle has enterprise access with higher quotas", file=sys.stderr)
-            print("   - Solution: Wait 60 seconds between requests or upgrade to paid tier", file=sys.stderr)
         
         import traceback
         traceback.print_exc(file=sys.stderr)

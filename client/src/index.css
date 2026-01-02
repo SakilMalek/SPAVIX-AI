@@ -117,7 +117,7 @@
   --accent: 240 3.7% 15.9%;
   --accent-foreground: 0 0% 98%;
   
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
   
   --border: 240 3.7% 15.9%;
@@ -143,6 +143,57 @@
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading font-bold tracking-tight;
+  }
+
+  /* Scrollbar Styling - Light Mode */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted) / 0.6);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted) / 0.8);
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: hsl(var(--muted));
+  }
+
+  /* Scrollbar Styling - Dark Mode */
+  .dark ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted) / 0.5);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted) / 0.7);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:active {
+    background: hsl(var(--muted) / 0.9);
+  }
+
+  /* Firefox Scrollbar */
+  * {
+    scrollbar-color: hsl(var(--muted) / 0.6) hsl(var(--background));
+    scrollbar-width: thin;
+  }
+
+  .dark * {
+    scrollbar-color: hsl(var(--muted) / 0.5) hsl(var(--background));
   }
 }
 

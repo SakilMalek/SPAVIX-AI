@@ -24,9 +24,9 @@ export function MaterialSelector({ type, value, onChange, label }: MaterialSelec
               <button
                 onClick={() => onChange(option.id)}
                 className={cn(
-                  "relative h-10 w-10 rounded-full border-2 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                  "relative h-10 w-10 rounded-full border-2 transition-all focus:outline-none",
                   value === option.id 
-                    ? "border-primary ring-2 ring-primary ring-offset-2 scale-110" 
+                    ? "border-primary ring-1 ring-primary ring-offset-1 scale-105" 
                     : "border-transparent hover:scale-105"
                 )}
                 style={{ backgroundColor: option.value }}

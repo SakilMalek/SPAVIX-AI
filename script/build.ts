@@ -8,7 +8,6 @@ const allowlist = [
   "@google/generative-ai",
   "axios",
   "connect-pg-simple",
-  "cors",
   "date-fns",
   "drizzle-orm",
   "drizzle-zod",
@@ -31,6 +30,9 @@ const allowlist = [
   "zod",
   "zod-validation-error",
 ];
+
+// Dependencies that must be external (have native bindings or can't be bundled)
+const forceExternal = ["cors"];
 
 async function buildAll() {
   await rm("dist", { recursive: true, force: true });
@@ -56,7 +58,7 @@ async function buildAll() {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
-    external: externals,
+    external: [...externals, ...forceExternal],
     logLevel: "info",
   });
 }

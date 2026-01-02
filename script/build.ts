@@ -8,6 +8,7 @@ const allowlist = [
   "@google/generative-ai",
   "axios",
   "connect-pg-simple",
+  "cors",
   "date-fns",
   "drizzle-orm",
   "drizzle-zod",
@@ -55,7 +56,7 @@ async function buildAll() {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
-    external: [...externals, "cors"],
+    external: externals,
     logLevel: "info",
   });
 }

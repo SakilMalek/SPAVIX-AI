@@ -1,6 +1,7 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import { execSync } from "child_process";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -32,6 +33,22 @@ const allowlist = [
 ];
 
 async function buildAll() {
+  // Step 1: Setup Python dependencies
+  console.log("\n========================================");
+  console.log("Step 1: Setting up Python dependencies...");
+  console.log("========================================\n");
+  try {
+    execSync("bash build.sh", { stdio: "inherit" });
+  } catch (err) {
+    console.error("Python setup failed:", err);
+    process.exit(1);
+  }
+
+  // Step 2: Build Node application
+  console.log("\n========================================");
+  console.log("Step 2: Building Node application...");
+  console.log("========================================\n");
+
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");
@@ -58,6 +75,10 @@ async function buildAll() {
     external: externals,
     logLevel: "info",
   });
+
+  console.log("\n========================================");
+  console.log("Build complete!");
+  console.log("========================================\n");
 }
 
 buildAll().catch((err) => {

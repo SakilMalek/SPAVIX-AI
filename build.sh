@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================="
-echo "SPAVIX Build Script - $(date)"
+echo "SPAVIX Python Setup - $(date)"
 echo "=========================================="
 
 echo ""
@@ -24,14 +24,6 @@ python3 -c "import PIL; print('✓ Pillow installed')"
 python3 -c "import dotenv; print('✓ python-dotenv installed')"
 
 echo ""
-echo "Step 4: Installing Node dependencies..."
-npm install
-
-echo ""
-echo "Step 5: Building application..."
-npm run build
-
-echo ""
 echo "=========================================="
-echo "Build complete! $(date)"
+echo "Python setup complete! $(date)"
 echo "=========================================="

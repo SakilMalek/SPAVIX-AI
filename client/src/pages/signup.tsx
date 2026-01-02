@@ -47,7 +47,8 @@ export default function SignupPage() {
 
     try {
       setIsLoading(true);
-      const response = await fetch("/api/auth/signup", {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl("/api/auth/signup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, profilePicture: selectedAvatar }),

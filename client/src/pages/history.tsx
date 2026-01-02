@@ -37,7 +37,8 @@ interface Transformation {
 
 const fetchTransformations = async (): Promise<Transformation[]> => {
   const token = localStorage.getItem("token");
-  const response = await fetch("/api/generations", {
+  const { getApiUrl } = await import("@/config/api");
+  const response = await fetch(getApiUrl("/api/generations"), {
     headers: {
       "Authorization": `Bearer ${token}`,
     },
@@ -52,7 +53,8 @@ const fetchTransformations = async (): Promise<Transformation[]> => {
 
 const fetchProjects = async () => {
   const token = localStorage.getItem("token");
-  const response = await fetch("/api/projects", {
+  const { getApiUrl } = await import("@/config/api");
+  const response = await fetch(getApiUrl("/api/projects"), {
     headers: {
       "Authorization": `Bearer ${token}`,
     },
@@ -117,7 +119,8 @@ export default function HistoryPage() {
       setSelectedProjectId("");
 
       // Then make the API call in the background
-      const response = await fetch(`/api/generations/${linkTargetId}/project`, {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl(`/api/generations/${linkTargetId}/project`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -183,7 +186,8 @@ export default function HistoryPage() {
       toast.success("Transformation deleted successfully");
       
       // Then make the delete request to the server
-      const response = await fetch(`/api/generations/${deleteTargetId}`, {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl(`/api/generations/${deleteTargetId}`), {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -225,7 +229,8 @@ export default function HistoryPage() {
   const handleShare = async (id: string) => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`/api/generations/${id}/share`, {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl(`/api/generations/${id}/share`), {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,

@@ -50,7 +50,8 @@ export default function ProfilePage() {
     setIsSaving(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/auth/update-profile", {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl("/api/auth/update-profile"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

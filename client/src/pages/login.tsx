@@ -39,7 +39,8 @@ export default function LoginPage() {
 
     try {
       setIsLoading(true);
-      const response = await fetch("/api/auth/login", {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl("/api/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

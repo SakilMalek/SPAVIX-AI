@@ -18,7 +18,9 @@ import {
   ChevronLeft,
   Loader,
   Trash2,
-  Edit2
+  Edit2,
+  X,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -30,9 +32,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { TransformationSlider } from "@/components/dashboard/TransformationSlider";
 
 interface Project {
   id: string;
@@ -44,7 +53,8 @@ interface Project {
 
 const fetchProjects = async (): Promise<Project[]> => {
   const token = localStorage.getItem("token");
-  const response = await fetch("/api/projects", {
+  const { getApiUrl } = await import("@/config/api");
+  const response = await fetch(getApiUrl("/api/projects"), {
     headers: {
       "Authorization": `Bearer ${token}`,
     },
@@ -241,13 +251,19 @@ export default function ProjectsPage() {
     { role: "bot", content: "Hello! I'm here to help you with your project. Ask me anything about design, materials, or transformations!" }
   ]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [selectedTransformation, setSelectedTransformation] = useState<any | null>(null);
+  const [isTransformationModalOpen, setIsTransformationModalOpen] = useState(false);
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [renameProjectName, setRenameProjectName] = useState("");
+  const [isRenamingProject, setIsRenamingProject] = useState(false);
+  const [isRefreshingTransformations, setIsRefreshingTransformations] = useState(false);
 
   const { data: projects = [], isLoading, refetch } = useQuery({
     queryKey: ["projects"],
     queryFn: fetchProjects,
   });
 
-  const { data: transformations = [], isLoading: isLoadingTransformations } = useQuery({
+  const { data: transformations = [], isLoading: isLoadingTransformations, refetch: refetchTransformations } = useQuery({
     queryKey: ["projectTransformations", selectedProjectId],
     queryFn: () => selectedProjectId ? fetchProjectTransformations(selectedProjectId) : Promise.resolve([]),
     enabled: !!selectedProjectId,
@@ -278,7 +294,8 @@ export default function ProjectsPage() {
     setIsCreating(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/projects", {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl("/api/projects"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -315,7 +332,8 @@ export default function ProjectsPage() {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`/api/projects/${projectId}`, {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl(`/api/projects/${projectId}`), {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -338,6 +356,51 @@ export default function ProjectsPage() {
     }
   }, [selectedProjectId, projects, queryClient]);
 
+  const handleOpenRenameDialog = useCallback(() => {
+    if (selectedProject) {
+      setRenameProjectName(selectedProject.name);
+      setIsRenameDialogOpen(true);
+    }
+  }, [selectedProject]);
+
+  const handleRenameProject = useCallback(async () => {
+    if (!selectedProjectId || !renameProjectName.trim()) {
+      toast.error("Project name is required");
+      return;
+    }
+
+    setIsRenamingProject(true);
+    try {
+      const token = localStorage.getItem("token");
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl(`/api/projects/${selectedProjectId}`), {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: renameProjectName,
+          description: selectedProject?.description || "",
+        }),
+      });
+
+      if (!response.ok) {
+        toast.error("Failed to rename project");
+        return;
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setIsRenameDialogOpen(false);
+      toast.success("Project renamed successfully!");
+    } catch (error) {
+      console.error("Error renaming project:", error);
+      toast.error("Error renaming project");
+    } finally {
+      setIsRenamingProject(false);
+    }
+  }, [selectedProjectId, renameProjectName, selectedProject, queryClient]);
+
   const handleShareProject = useCallback(async () => {
     if (!selectedProjectId) {
       toast.error("Please select a project first");
@@ -347,7 +410,8 @@ export default function ProjectsPage() {
     setIsCreatingShare(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`/api/projects/${selectedProjectId}/share`, {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl(`/api/projects/${selectedProjectId}/share`), {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -395,7 +459,8 @@ export default function ProjectsPage() {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/chat", {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl("/api/chat"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -436,6 +501,19 @@ export default function ProjectsPage() {
   const handleCloseChat = useCallback(() => {
     setIsChatOpen(false);
   }, []);
+
+  const handleRefreshTransformations = useCallback(async () => {
+    setIsRefreshingTransformations(true);
+    try {
+      await refetchTransformations();
+      toast.success("Transformations refreshed!");
+    } catch (error) {
+      console.error("Error refreshing transformations:", error);
+      toast.error("Failed to refresh transformations");
+    } finally {
+      setIsRefreshingTransformations(false);
+    }
+  }, [refetchTransformations]);
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -487,13 +565,40 @@ export default function ProjectsPage() {
               {isMobile && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsChatOpen(true)}><Bot className="w-4 h-4" /></Button>}
               <Button 
                 variant="outline" 
+                size="icon"
+                className="h-8 w-8 hidden sm:flex"
+                onClick={handleRefreshTransformations}
+                disabled={isRefreshingTransformations}
+                title="Refresh transformations"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshingTransformations ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button 
+                variant="outline" 
                 size="sm" 
                 className="h-8 text-xs hidden sm:flex"
                 onClick={() => setIsShareDialogOpen(true)}
               >
                 Share
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleOpenRenameDialog}>
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => selectedProjectId && handleDeleteProject(selectedProjectId)}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
@@ -525,7 +630,10 @@ export default function ProjectsPage() {
                       <Card 
                         key={transformation.id} 
                         className="aspect-square overflow-hidden border-none shadow-sm hover:shadow-md transition-shadow cursor-pointer group relative"
-                        onClick={() => window.location.href = `/transformation/${transformation.id}`}
+                        onClick={() => {
+                          setSelectedTransformation(transformation);
+                          setIsTransformationModalOpen(true);
+                        }}
                       >
                         <img 
                           src={transformation.after_image_url} 
@@ -689,6 +797,87 @@ export default function ProjectsPage() {
               }}
             >
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transformation Detail Modal */}
+      <Dialog open={isTransformationModalOpen} onOpenChange={setIsTransformationModalOpen}>
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle className="capitalize">
+                {selectedTransformation?.room_type} - {selectedTransformation?.style}
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {selectedTransformation && new Date(selectedTransformation.created_at).toLocaleDateString()}
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsTransformationModalOpen(false)}
+              className="h-8 w-8"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </DialogHeader>
+          
+          {selectedTransformation && (
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <TransformationSlider
+                beforeImage={selectedTransformation.before_image_url}
+                afterImage={selectedTransformation.after_image_url}
+                className="h-full"
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Project Modal */}
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Rename Project</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="rename-project-name">Project Name</Label>
+              <Input
+                id="rename-project-name"
+                placeholder="Enter new project name"
+                value={renameProjectName}
+                onChange={(e) => setRenameProjectName(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !isRenamingProject) {
+                    handleRenameProject();
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsRenameDialogOpen(false)}
+              disabled={isRenamingProject}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRenameProject}
+              disabled={isRenamingProject || !renameProjectName.trim()}
+            >
+              {isRenamingProject ? (
+                <>
+                  <Loader className="w-4 h-4 mr-2 animate-spin" />
+                  Renaming...
+                </>
+              ) : (
+                "Rename"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

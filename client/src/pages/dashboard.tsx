@@ -20,7 +20,8 @@ import { useQuery } from "@tanstack/react-query";
 
 const fetchProjects = async () => {
   const token = localStorage.getItem("token");
-  const response = await fetch("/api/projects", {
+  const { getApiUrl } = await import("@/config/api");
+  const response = await fetch(getApiUrl("/api/projects"), {
     headers: {
       "Authorization": `Bearer ${token}`,
     },
@@ -83,7 +84,8 @@ export default function DashboardPage() {
       const token = localStorage.getItem('token');
       console.log('Sending generation request with token:', !!token);
       
-      const response = await fetch('/api/generations', {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl('/api/generations'), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -205,12 +207,12 @@ export default function DashboardPage() {
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">3</div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Project</h3>
           </div>
-          <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+          <Select value={selectedProjectId || "none"} onValueChange={(value) => setSelectedProjectId(value === "none" ? "" : value)}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select a project (optional)" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">No Project</SelectItem>
+              <SelectItem value="none">No Project</SelectItem>
               {projects.map((project: any) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}

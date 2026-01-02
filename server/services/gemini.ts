@@ -115,7 +115,7 @@ export class GeminiImageService {
         }
       }
       
-      const pythonProcess = spawn('python', [
+      const pythonProcess = spawn('python3', [
         scriptPath,
         '--prompt',
         prompt,

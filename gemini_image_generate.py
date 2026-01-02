@@ -11,6 +11,9 @@ import json
 import base64
 import requests
 from io import BytesIO
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def generate_image(prompt: str, input_image_path: str, output_path: str):

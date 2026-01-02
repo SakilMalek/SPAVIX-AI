@@ -4,7 +4,6 @@ import MemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import cors from "cors";
 
 const app = express();
 const httpServer = createServer(app);
@@ -28,19 +27,28 @@ const memStore = MemoryStore(session);
 // CORS configuration for Vercel frontend
 const allowedOrigins = [
   "https://spavix-ai.vercel.app",
+  "https://spavix-vision.vercel.app",
   "http://localhost:5000",
   "http://localhost:3000",
   process.env.FRONTEND_URL, // Allow custom frontend URL via env variable
 ].filter((url): url is string => Boolean(url));
 
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+// Manual CORS middleware without external dependency
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 app.use(
   session({

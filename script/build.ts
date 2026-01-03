@@ -33,15 +33,17 @@ const allowlist = [
 ];
 
 async function buildAll() {
-  // Step 1: Setup Python dependencies
-  console.log("\n========================================");
-  console.log("Step 1: Setting up Python dependencies...");
-  console.log("========================================\n");
-  try {
-    execSync("bash build.sh", { stdio: "inherit" });
-  } catch (err) {
-    console.error("Python setup failed:", err);
-    process.exit(1);
+  // Step 1: Setup Python dependencies (skip on Windows)
+  if (process.platform !== "win32") {
+    console.log("\n========================================");
+    console.log("Step 1: Setting up Python dependencies...");
+    console.log("========================================\n");
+    try {
+      execSync("bash build.sh", { stdio: "inherit" });
+    } catch (err) {
+      console.error("Python setup failed:", err);
+      process.exit(1);
+    }
   }
 
   // Step 2: Build Node application
@@ -71,7 +73,8 @@ async function buildAll() {
     define: {
       "process.env.NODE_ENV": '"production"',
     },
-    minify: true,
+    minify: false,
+    sourcemap: true,
     external: externals,
     logLevel: "info",
   });

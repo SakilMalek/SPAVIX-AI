@@ -3,11 +3,25 @@ services:
     name: spavix-vision-api
     env: node
     plan: free
-    buildCommand: bash build.sh
+    buildCommand: npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3000
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: spavix-db
+          property: connectionString
     autoDeploy: true
+
+databases:
+  - name: spavix-db
+    plan: free

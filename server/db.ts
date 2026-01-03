@@ -1,8 +1,10 @@
 import { Pool, QueryResult } from 'pg';
+import { logger } from './utils/logger.js';
+import { logQuery, logSlowQuery } from './middleware/queryLogger.js';
 
 let pool: Pool | null = null;
 
-function getPool(): Pool {
+export function getPool(): Pool {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
 
@@ -17,11 +19,11 @@ function getPool(): Pool {
       ssl: {
         rejectUnauthorized: false,
       },
-      max: 10,
-      min: 0,
-      idleTimeoutMillis: 60000,
-      connectionTimeoutMillis: 30000,
-      statement_timeout: 60000,
+      max: 20,                    // Increased from 10 for better concurrency
+      min: 2,                     // Maintain minimum connections
+      idleTimeoutMillis: 30000,   // Reduced from 60000 for faster cleanup
+      connectionTimeoutMillis: 15000, // Increased to 15s for stable connections
+      statement_timeout: 30000,   // Reduced from 60000 for query timeout
       application_name: 'spavix-api',
     });
 
@@ -33,6 +35,17 @@ function getPool(): Pool {
     pool.on('connect', () => {
       console.log('New database connection established');
     });
+
+    // Log pool stats periodically in development
+    if (process.env.NODE_ENV !== 'production') {
+      setInterval(() => {
+        console.log('[DB Pool Stats]', {
+          totalCount: pool?.totalCount,
+          idleCount: pool?.idleCount,
+          waitingCount: pool?.waitingCount,
+        });
+      }, 60000); // Every minute
+    }
   }
 
   return pool;
@@ -40,12 +53,25 @@ function getPool(): Pool {
 
 export class Database {
   static async query(text: string, params?: unknown[], retries: number = 3): Promise<QueryResult> {
+    const startTime = Date.now();
     try {
-      return await getPool().query(text, params);
+      const result = await getPool().query(text, params);
+      const duration = Date.now() - startTime;
+      
+      // Log query execution
+      logQuery({ query: text, params, duration, rowCount: result.rowCount || undefined });
+      logSlowQuery({ query: text, params, duration, rowCount: result.rowCount || undefined });
+      
+      return result;
     } catch (error: any) {
+      const duration = Date.now() - startTime;
+      
+      // Log query error
+      logQuery({ query: text, params, duration, error: error as Error });
+      
       // Retry on SSL/connection errors
       if (retries > 0 && (error.code === 'ECONNREFUSED' || error.message?.includes('SSL') || error.message?.includes('decryption'))) {
-        console.warn(`Query failed, retrying... (${retries} retries left)`, error.message);
+        logger.warn(`Query failed, retrying... (${retries} retries left)`, { query: text, error: error.message });
         await new Promise(resolve => setTimeout(resolve, 1000));
         return this.query(text, params, retries - 1);
       }
@@ -67,7 +93,22 @@ export class Database {
   }
 
   static async getUserById(id: string): Promise<{ id: string; email: string; name?: string; picture?: string } | null> {
-    const result = await this.query('SELECT id, email, name, picture FROM users WHERE id = $1', [id]);
+    const result = await this.query(
+      `SELECT id, email, name, picture
+       FROM users
+       WHERE id = $1`,
+      [id]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async getUserByIdWithPassword(id: string): Promise<{ id: string; email: string; name?: string; picture?: string; passwordHash: string } | null> {
+    const result = await this.query(
+      `SELECT id, email, name, picture, password_hash as "passwordHash"
+       FROM users
+       WHERE id = $1`,
+      [id]
+    );
     return result.rows[0] || null;
   }
 
@@ -75,6 +116,48 @@ export class Database {
     await this.query(
       'UPDATE users SET name = COALESCE($2, name), picture = COALESCE($3, picture), updated_at = NOW() WHERE id = $1',
       [id, name || null, picture || null]
+    );
+  }
+
+  static async deleteUser(id: string): Promise<void> {
+    await this.query(
+      'DELETE FROM users WHERE id = $1',
+      [id]
+    );
+  }
+
+  static async recordUserConsent(
+    userId: string,
+    privacyConsent: boolean,
+    termsConsent: boolean,
+    marketingConsent: boolean
+  ): Promise<void> {
+    await this.query(
+      `UPDATE users SET 
+        privacy_consent = $2,
+        terms_consent = $3,
+        marketing_consent = $4,
+        consent_timestamp = NOW()
+      WHERE id = $1`,
+      [userId, privacyConsent, termsConsent, marketingConsent]
+    );
+  }
+
+  static async withdrawConsent(userId: string, consentType: string): Promise<void> {
+    const columnMap: Record<string, string> = {
+      privacy: 'privacy_consent',
+      terms: 'terms_consent',
+      marketing: 'marketing_consent'
+    };
+
+    const column = columnMap[consentType];
+    if (!column) {
+      throw new Error('Invalid consent type');
+    }
+
+    await this.query(
+      `UPDATE users SET ${column} = false, consent_timestamp = NOW() WHERE id = $1`,
+      [userId]
     );
   }
 
@@ -96,11 +179,18 @@ export class Database {
     return result.rows[0];
   }
 
-  static async getGenerations(userId: string, limit = 20, offset = 0): Promise<unknown[]> {
+  static async getGenerations(userId: string, limit: number = 20, offset: number = 0): Promise<unknown[]> {
+    const queryStart = Date.now();
+    console.log(`[DB] Starting getGenerations query for user ${userId} (limit=${limit}, offset=${offset})`);
+    
     const result = await this.query(
-      'SELECT * FROM generations WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      'SELECT id, user_id, project_id, style, materials, room_type, created_at, updated_at FROM generations WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
       [userId, limit, offset]
     );
+    
+    const queryDuration = Date.now() - queryStart;
+    console.log(`[DB] getGenerations query completed in ${queryDuration}ms, returned ${result.rows.length} rows`);
+    
     return result.rows;
   }
 
@@ -144,6 +234,23 @@ export class Database {
   }
 
   static async initializeDatabase(): Promise<void> {
+    // Check if tables already exist to skip initialization
+    try {
+      const result = await this.query(`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = 'users'
+        );
+      `);
+      
+      if (result.rows[0]?.exists) {
+        console.log('✅ Database tables already initialized, skipping initialization');
+        return;
+      }
+    } catch (error) {
+      console.log('Could not check if tables exist, proceeding with initialization');
+    }
+
     try {
       await this.query(`
         CREATE TABLE IF NOT EXISTS users (
@@ -297,6 +404,24 @@ export class Database {
       CREATE INDEX IF NOT EXISTS idx_chat_messages_project_id ON chat_messages(project_id);
       CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id ON chat_messages(user_id);
       CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
+
+      CREATE TABLE IF NOT EXISTS transformation_history (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        generation_id UUID NOT NULL REFERENCES generations(id) ON DELETE CASCADE,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        version_number INT NOT NULL,
+        before_image_url TEXT NOT NULL,
+        after_image_url TEXT NOT NULL,
+        style VARCHAR(100) NOT NULL,
+        materials JSONB,
+        room_type VARCHAR(50),
+        status VARCHAR(20) DEFAULT 'completed',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_transformation_history_generation_id ON transformation_history(generation_id);
+      CREATE INDEX IF NOT EXISTS idx_transformation_history_user_id ON transformation_history(user_id);
+      CREATE INDEX IF NOT EXISTS idx_transformation_history_created_at ON transformation_history(created_at);
     `);
   }
 
@@ -324,6 +449,87 @@ export class Database {
       return typeof data === 'string' ? data : data.content || null;
     }
     return null;
+  }
+
+  static async saveTransformationHistory(
+    generationId: string,
+    userId: string,
+    versionNumber: number,
+    beforeImageUrl: string,
+    afterImageUrl: string,
+    style: string,
+    materials: Record<string, string>,
+    roomType: string,
+    status: string = 'completed'
+  ): Promise<{ id: string }> {
+    const result = await this.query(
+      `INSERT INTO transformation_history (generation_id, user_id, version_number, before_image_url, after_image_url, style, materials, room_type, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       RETURNING id`,
+      [generationId, userId, versionNumber, beforeImageUrl, afterImageUrl, style, JSON.stringify(materials), roomType, status]
+    );
+    return result.rows[0];
+  }
+
+  static async getTransformationHistory(generationId: string, userId: string, limit: number = 10, offset: number = 0): Promise<any[]> {
+    const result = await this.query(
+      `SELECT id, generation_id, user_id, version_number, style, room_type, status, created_at 
+       FROM transformation_history 
+       WHERE generation_id = $1 AND user_id = $2 
+       ORDER BY version_number DESC
+       LIMIT $3 OFFSET $4`,
+      [generationId, userId, limit, offset]
+    );
+    return result.rows;
+  }
+
+  static async getTransformationHistoryCount(generationId: string, userId: string): Promise<number> {
+    const result = await this.query(
+      `SELECT COUNT(*) as count FROM transformation_history 
+       WHERE generation_id = $1 AND user_id = $2`,
+      [generationId, userId]
+    );
+    return result.rows[0]?.count || 0;
+  }
+
+  static async getTransformationHistoryWithImages(generationId: string, userId: string, limit: number = 10, offset: number = 0): Promise<any[]> {
+    const result = await this.query(
+      `SELECT * FROM transformation_history 
+       WHERE generation_id = $1 AND user_id = $2 
+       ORDER BY version_number DESC
+       LIMIT $3 OFFSET $4`,
+      [generationId, userId, limit, offset]
+    );
+    return result.rows;
+  }
+
+  static async getTransformationVersion(generationId: string, userId: string, versionNumber: number): Promise<any> {
+    const result = await this.query(
+      `SELECT * FROM transformation_history 
+       WHERE generation_id = $1 AND user_id = $2 AND version_number = $3`,
+      [generationId, userId, versionNumber]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async getLatestTransformationVersion(generationId: string, userId: string): Promise<any> {
+    const result = await this.query(
+      `SELECT * FROM transformation_history 
+       WHERE generation_id = $1 AND user_id = $2 
+       ORDER BY version_number DESC 
+       LIMIT 1`,
+      [generationId, userId]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async getNextVersionNumber(generationId: string): Promise<number> {
+    const result = await this.query(
+      `SELECT MAX(version_number) as max_version FROM transformation_history WHERE generation_id = $1`,
+      [generationId]
+    );
+    const maxVersion = result.rows[0]?.max_version || 0;
+    return maxVersion + 1;
   }
 
   static async createShare(
@@ -495,5 +701,15 @@ export class Database {
       [projectId, userId]
     );
     return result.rows;
+  }
+
+  static async updateUserPassword(userId: string, passwordHash: string): Promise<boolean> {
+    const result = await this.query(
+      `UPDATE users 
+       SET password_hash = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [passwordHash, userId]
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 }

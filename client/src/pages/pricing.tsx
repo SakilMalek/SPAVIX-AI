@@ -71,7 +71,7 @@ export default function PricingPage() {
               key={plan.name} 
               className={cn(
                 "relative flex flex-col border-none shadow-2xl glass-panel overflow-hidden",
-                plan.popular ? "ring-2 ring-primary scale-105 z-10" : ""
+                plan.popular ? "ring-2 ring-primary relative z-10" : ""
               )}
             >
               {plan.popular && (

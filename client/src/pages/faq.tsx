@@ -133,6 +133,13 @@ export default function FAQPage() {
     setOpenItems(newOpen);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleItem(id);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
@@ -152,7 +159,7 @@ export default function FAQPage() {
         <div className="max-w-4xl mx-auto space-y-12">
           {FAQS.map((category, categoryIdx) => (
             <div key={categoryIdx} className="space-y-4">
-              <h2 className="text-2xl font-bold font-heading sticky top-0 bg-background py-2">
+              <h2 className="text-2xl font-bold font-heading sticky top-0 bg-background py-2 z-10 border-b">
                 {category.category}
               </h2>
               <div className="space-y-3">
@@ -166,10 +173,15 @@ export default function FAQPage() {
                     >
                       <button
                         onClick={() => toggleItem(itemId)}
+                        onKeyDown={(e) => handleKeyDown(e, itemId)}
                         className="w-full text-left"
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={isOpen}
+                        aria-controls={`faq-answer-${itemId}`}
                       >
                         <CardContent className="pt-6 pb-0 flex items-start justify-between gap-4 cursor-pointer hover:text-primary transition-colors">
-                          <h3 className="text-lg font-semibold leading-relaxed">
+                          <h3 id={`faq-question-${itemId}`} className="text-lg font-semibold leading-relaxed">
                             {faq.q}
                           </h3>
                           <ChevronDown
@@ -177,12 +189,18 @@ export default function FAQPage() {
                               "w-5 h-5 shrink-0 transition-transform mt-1",
                               isOpen && "rotate-180"
                             )}
+                            aria-hidden="true"
                           />
                         </CardContent>
                       </button>
 
                       {isOpen && (
-                        <CardContent className="pt-4 pb-6 text-muted-foreground">
+                        <CardContent 
+                          id={`faq-answer-${itemId}`}
+                          className="pt-4 pb-6 text-muted-foreground"
+                          role="region"
+                          aria-labelledby={`faq-question-${itemId}`}
+                        >
                           <p className="leading-relaxed">{faq.a}</p>
                         </CardContent>
                       )}

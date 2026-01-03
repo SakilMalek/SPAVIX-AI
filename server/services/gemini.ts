@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -6,8 +6,45 @@ import * as fs from 'fs';
 // In production, the script is at the root directory
 const GEMINI_SCRIPT_PATH = path.join(process.cwd(), 'gemini_image_generate.py');
 
+function findPythonCommand(): string {
+  const candidates = process.platform === 'win32' 
+    ? ['python', 'python3', 'py']
+    : ['python3', 'python'];
+  
+  for (const cmd of candidates) {
+    try {
+      const result = spawnSync(cmd, ['--version'], { 
+        timeout: 5000,
+        stdio: 'pipe'
+      });
+      if (result.status === 0) {
+        console.log(`[Gemini] Found Python: ${cmd}`);
+        return cmd;
+      }
+    } catch (error) {
+      // Continue to next candidate
+    }
+  }
+  
+  // Default fallback
+  console.warn('[Gemini] Could not detect Python, using default: python');
+  return process.platform === 'win32' ? 'python' : 'python3';
+}
+
+
 export class GeminiImageService {
+  private static readonly MAX_RETRIES = 3;
+  private static readonly INITIAL_RETRY_DELAY = 1000; // 1 second
+
   static async generateImage(prompt: string, inputImageUrl: string): Promise<Buffer> {
+    return this.generateImageWithRetry(prompt, inputImageUrl, 0);
+  }
+
+  private static async generateImageWithRetry(
+    prompt: string,
+    inputImageUrl: string,
+    retryCount: number
+  ): Promise<Buffer> {
     try {
       console.log('Using Gemini 2.5 Flash Image (img2img)');
       console.log('Prompt:', prompt);
@@ -54,8 +91,17 @@ export class GeminiImageService {
       return imageBuffer;
     } catch (error: any) {
       const errorMessage = error.message || JSON.stringify(error);
+      const isRetryableError = error.status === 429 || error.status === 503 || error.code === 'ECONNRESET';
+      
+      if (isRetryableError && retryCount < this.MAX_RETRIES) {
+        const delayMs = this.INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+        console.warn(`⚠️ Retryable error (${error.status || error.code}), retrying in ${delayMs}ms (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        return this.generateImageWithRetry(prompt, inputImageUrl, retryCount + 1);
+      }
+      
       console.error('❌ Gemini generation error:', errorMessage);
-      throw error; // Propagate the error instead of silently failing
+      throw error;
     }
   }
 
@@ -70,12 +116,27 @@ export class GeminiImageService {
       throw new Error(`Image is too small (${imageBuffer.length} bytes). Minimum required: ${minImageSize} bytes. This usually means the image is corrupted or over-compressed. Try uploading a higher quality image.`);
     }
     
-    fs.writeFileSync(outputPath, imageBuffer);
+    await fs.promises.writeFile(outputPath, imageBuffer);
     console.log(`✅ Saved input image to: ${outputPath} (${imageBuffer.length} bytes)`);
   }
 
   private static async runGeminiGeneration(prompt: string, inputPath: string, outputPath: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
+      // Cleanup function to remove temporary files
+      const cleanup = (error?: Error) => {
+        const filesToClean = [inputPath, outputPath];
+        for (const filePath of filesToClean) {
+          try {
+            if (fs.existsSync(filePath)) {
+              fs.unlinkSync(filePath);
+              console.log(`[Gemini] Cleaned up: ${filePath}`);
+            }
+          } catch (err) {
+            console.warn(`[Gemini] Failed to cleanup ${filePath}:`, err);
+          }
+        }
+      };
+
       // Try to load API key from config file first, then fall back to environment
       let apiKey = process.env.GEMINI_API_KEY;
       
@@ -93,6 +154,7 @@ export class GeminiImageService {
       }
       
       if (!apiKey) {
+        cleanup();
         reject(new Error('GEMINI_API_KEY not found in gemini_config.json or environment variables'));
         return;
       }
@@ -110,12 +172,14 @@ export class GeminiImageService {
           console.log(`[Gemini] Using alternative script path: ${alternativePath}`);
           scriptPath = alternativePath;
         } else {
+          cleanup();
           reject(new Error(`Python script not found at ${scriptPath} or ${alternativePath}`));
           return;
         }
       }
       
-      const pythonProcess = spawn('python3', [
+      const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+      const pythonProcess = spawn(pythonCommand, [
         scriptPath,
         '--prompt',
         prompt,
@@ -135,10 +199,21 @@ export class GeminiImageService {
       let stdout = '';
       let stderr = '';
       let timedOut = false;
+      let resolved = false;
 
       const timeoutHandle = setTimeout(() => {
         timedOut = true;
-        pythonProcess.kill();
+        console.warn('[Gemini] Process timeout - killing Python process');
+        pythonProcess.kill('SIGTERM');
+        
+        // Force kill if SIGTERM doesn't work
+        const killTimer = setTimeout(() => {
+          console.warn('[Gemini] SIGTERM failed - force killing with SIGKILL');
+          pythonProcess.kill('SIGKILL');
+        }, 5000);
+        
+        cleanup();
+        resolved = true;
         reject(new Error('Python process timed out after 5 minutes'));
       }, 300000); // 5 minutes timeout for Gemini API
 
@@ -157,16 +232,24 @@ export class GeminiImageService {
       pythonProcess.on('close', (code) => {
         clearTimeout(timeoutHandle);
         
-        if (timedOut) {
-          return; // Already rejected
+        if (resolved) {
+          return; // Already resolved or rejected
         }
 
+        if (timedOut) {
+          return; // Already rejected by timeout handler
+        }
+
+        resolved = true;
+
         if (code !== 0) {
+          cleanup();
           reject(new Error(`Python process exited with code ${code}.\nStderr: ${stderr}`));
           return;
         }
 
         if (!fs.existsSync(outputPath)) {
+          cleanup();
           reject(new Error(`Output image file not created at ${outputPath}`));
           return;
         }
@@ -174,14 +257,23 @@ export class GeminiImageService {
         try {
           const imageBuffer = fs.readFileSync(outputPath);
           console.log(`[Gemini] Successfully read output image: ${imageBuffer.length} bytes`);
+          // Don't cleanup on success - keep files for inspection
           resolve(imageBuffer);
         } catch (error) {
+          cleanup();
           reject(error);
         }
       });
 
       pythonProcess.on('error', (error) => {
         clearTimeout(timeoutHandle);
+        
+        if (resolved) {
+          return;
+        }
+
+        resolved = true;
+        cleanup();
         reject(new Error(`Failed to spawn Python process: ${error.message}`));
       });
     });

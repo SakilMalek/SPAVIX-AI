@@ -1,0 +1,23 @@
+{
+  "extends": "stylelint-config-standard",
+  "rules": {
+    "at-rule-no-unknown": [
+      true,
+      {
+        "ignoreAtRules": [
+          "tailwind",
+          "apply",
+          "responsive",
+          "screen",
+          "layer",
+          "plugin",
+          "custom-variant",
+          "theme",
+          "import"
+        ]
+      }
+    ],
+    "declaration-block-trailing-semicolon": null,
+    "no-descending-specificity": null
+  }
+}

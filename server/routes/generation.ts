@@ -3,6 +3,10 @@ import { GeminiImageService } from '../services/gemini';
 import { ShoppingListService } from '../services/shopping';
 import { Database } from '../db';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { generateSecureShareId } from '../utils/shareId';
+import { logger } from '../utils/logger';
+import { Errors, asyncHandler } from '../middleware/errorHandler.js';
+import { paginationSchema, validateRequest } from '../middleware/validation.js';
 
 export const generationRoutes = Router();
 
@@ -61,13 +65,27 @@ generationRoutes.post('/', authMiddleware, async (req: AuthRequest, res: Respons
       projectId
     );
 
-    console.log('Generation saved to database:', generation.id);
+    // Save initial transformation history (version 1)
+    await Database.saveTransformationHistory(
+      generation.id,
+      req.user.id,
+      1,
+      imageUrl,
+      afterImageUrl,
+      style,
+      materials,
+      roomType,
+      'completed'
+    );
+
+    logger.info('Generation created with history', { generationId: generation.id, userId: req.user.id });
 
     res.json({
       success: true,
       generationId: generation.id,
       beforeImage: imageUrl,
       afterImage: afterImageUrl,
+      version: 1,
     });
   } catch (error: any) {
     console.error('Generation error:', error.message || error);
@@ -100,35 +118,40 @@ generationRoutes.get(/^\/shares\/([a-zA-Z0-9]+)$/, async (req: any, res: Respons
   }
 });
 
-generationRoutes.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
-
-    const generations = await Database.getGenerations(req.user.id, limit, offset);
-
-    const formattedGenerations = generations.map((gen: any) => ({
-      id: gen.id,
-      before_image_url: gen.before_image_url,
-      after_image_url: gen.after_image_url,
-      style: gen.style,
-      room_type: gen.room_type,
-      created_at: gen.created_at,
-    }));
-
-    console.log('Returning generations:', formattedGenerations.length, 'items');
-
-    res.json(formattedGenerations);
-  } catch (error) {
-    console.error('Get generations error:', error);
-    res.status(500).json({ error: 'Failed to fetch generations' });
+generationRoutes.get('/', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw Errors.unauthorized();
   }
-});
+
+  const startTime = Date.now();
+  console.log(`[GENERATIONS] Starting GET / request for user ${req.user.id}`);
+
+  const validationStart = Date.now();
+  const validated = validateRequest(paginationSchema, req.query);
+  const { limit, offset } = validated;
+  console.log(`[GENERATIONS] Validation took ${Date.now() - validationStart}ms`);
+
+  const dbStart = Date.now();
+  const generations = await Database.getGenerations(req.user.id, limit, offset);
+  const dbDuration = Date.now() - dbStart;
+  console.log(`[GENERATIONS] Database query took ${dbDuration}ms, returned ${generations.length} items`);
+
+  const formatStart = Date.now();
+  const formattedGenerations = generations.map((gen: any) => ({
+    id: gen.id,
+    style: gen.style,
+    room_type: gen.room_type,
+    created_at: gen.created_at,
+    // Images are loaded on-demand to avoid transferring 50+ MB of data
+  }));
+  console.log(`[GENERATIONS] Formatting took ${Date.now() - formatStart}ms`);
+
+  const totalDuration = Date.now() - startTime;
+  console.log(`[GENERATIONS] Total request time: ${totalDuration}ms`);
+  logger.info('Generations retrieved', { userId: req.user.id, count: formattedGenerations.length, duration: totalDuration });
+
+  res.json(formattedGenerations);
+}));
 
 generationRoutes.get('/:id', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -251,8 +274,8 @@ generationRoutes.post('/:id/share', authMiddleware, async (req: AuthRequest, res
       return;
     }
 
-    // Generate unique share ID
-    const shareId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    // Generate cryptographically secure share ID
+    const shareId = generateSecureShareId();
 
     const share = await Database.createShare(req.params.id, req.user.id, shareId);
 
@@ -294,6 +317,129 @@ generationRoutes.get('/project/:projectId', authMiddleware, async (req: AuthRequ
   }
 });
 
+// GET transformation history for a generation (paginated, without images)
+generationRoutes.get('/:id/history', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw Errors.unauthorized('Not authenticated');
+  }
+
+  const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+  const offset = parseInt(req.query.offset as string) || 0;
+
+  const history = await Database.getTransformationHistory(req.params.id, req.user.id, limit, offset);
+  const totalCount = await Database.getTransformationHistoryCount(req.params.id, req.user.id);
+
+  if (!history || history.length === 0) {
+    throw Errors.notFound('No transformation history found');
+  }
+
+  const formattedHistory = history.map((h: any) => ({
+    id: h.id,
+    version_number: h.version_number,
+    style: h.style,
+    room_type: h.room_type,
+    status: h.status,
+    created_at: h.created_at,
+  }));
+
+  logger.info('Transformation history retrieved', { generationId: req.params.id, userId: req.user.id, versions: history.length, total: totalCount });
+
+  res.json({
+    generationId: req.params.id,
+    totalVersions: totalCount,
+    currentPage: Math.floor(offset / limit) + 1,
+    pageSize: limit,
+    history: formattedHistory,
+  });
+}));
+
+// GET specific version of transformation
+generationRoutes.get('/:id/history/:version', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw Errors.unauthorized('Not authenticated');
+  }
+
+  const versionNumber = parseInt(req.params.version);
+  const version = await Database.getTransformationVersion(req.params.id, req.user.id, versionNumber);
+
+  if (!version) {
+    throw Errors.notFound('Version not found');
+  }
+
+  logger.info('Transformation version retrieved', { generationId: req.params.id, userId: req.user.id, version: versionNumber });
+
+  res.json({
+    id: version.id,
+    generation_id: version.generation_id,
+    version_number: version.version_number,
+    style: version.style,
+    room_type: version.room_type,
+    materials: version.materials,
+    before_image_url: version.before_image_url,
+    after_image_url: version.after_image_url,
+    status: version.status,
+    created_at: version.created_at,
+  });
+}));
+
+// CREATE new transformation version (edit existing generation)
+generationRoutes.post('/:id/history', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw Errors.unauthorized('Not authenticated');
+  }
+
+  const { imageUrl, roomType, style, materials } = req.body;
+
+  if (!imageUrl || !roomType || !style) {
+    throw Errors.validationError('Missing required fields: imageUrl, roomType, style');
+  }
+
+  // Verify generation exists and belongs to user
+  const generation = await Database.getGenerationById(req.params.id, req.user.id);
+  if (!generation) {
+    throw Errors.notFound('Generation not found');
+  }
+
+  // Generate new version
+  const prompt = GeminiImageService.buildPrompt(roomType, style, materials);
+  let imageBuffer: Buffer;
+  try {
+    imageBuffer = await GeminiImageService.generateImage(prompt, imageUrl);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Gemini generation failed', { error: errorMessage, generationId: req.params.id });
+    throw Errors.internalError(`Image generation failed: ${errorMessage}`);
+  }
+
+  const afterImageUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+
+  // Get next version number
+  const nextVersion = await Database.getNextVersionNumber(req.params.id);
+
+  // Save new transformation version
+  await Database.saveTransformationHistory(
+    req.params.id,
+    req.user.id,
+    nextVersion,
+    imageUrl,
+    afterImageUrl,
+    style,
+    materials,
+    roomType,
+    'completed'
+  );
+
+  logger.info('New transformation version created', { generationId: req.params.id, userId: req.user.id, version: nextVersion });
+
+  res.json({
+    success: true,
+    generationId: req.params.id,
+    version: nextVersion,
+    beforeImage: imageUrl,
+    afterImage: afterImageUrl,
+  });
+}));
+
 // UPDATE generation project association
 generationRoutes.put('/:id/project', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -304,18 +450,73 @@ generationRoutes.put('/:id/project', authMiddleware, async (req: AuthRequest, re
 
     const { projectId } = req.body as { projectId: string | null };
 
-    const generation = await Database.updateGenerationProject(req.params.id, req.user.id, projectId || null);
-
+    // Verify generation exists and belongs to user
+    const generation = await Database.getGenerationById(req.params.id, req.user.id);
     if (!generation) {
       res.status(404).json({ error: 'Generation not found' });
       return;
     }
 
-    console.log('Generation project updated:', req.params.id, 'projectId:', projectId);
+    // Verify project exists and belongs to user (if projectId provided)
+    if (projectId) {
+      const project = await Database.getProjectById(projectId, req.user.id);
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+    }
 
-    res.json({ success: true, generation });
+    // Update generation project association
+    const oldProjectId = generation.project_id;
+    const updated = await Database.updateGenerationProject(req.params.id, req.user.id, projectId || null);
+
+    // Log the assignment change
+    logger.info('Transformation project assignment changed', {
+      generationId: req.params.id,
+      oldProjectId: oldProjectId,
+      newProjectId: projectId || null,
+      userId: req.user.id
+    });
+
+    res.json({ success: true, generation: updated });
   } catch (error) {
     console.error('Update generation project error:', error);
     res.status(500).json({ error: 'Failed to update generation project' });
+  }
+});
+
+// UNLINK generation from project
+generationRoutes.delete('/:id/project', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    // Verify generation exists and belongs to user
+    const generation = await Database.getGenerationById(req.params.id, req.user.id);
+    if (!generation) {
+      res.status(404).json({ error: 'Generation not found' });
+      return;
+    }
+
+    if (!generation.project_id) {
+      res.status(400).json({ error: 'Generation is not linked to any project' });
+      return;
+    }
+
+    // Unlink from project
+    const updated = await Database.updateGenerationProject(req.params.id, req.user.id, null);
+
+    logger.info('Transformation unlinked from project', {
+      generationId: req.params.id,
+      projectId: generation.project_id,
+      userId: req.user.id
+    });
+
+    res.json({ success: true, generation: updated });
+  } catch (error) {
+    console.error('Unlink generation project error:', error);
+    res.status(500).json({ error: 'Failed to unlink generation from project' });
   }
 });

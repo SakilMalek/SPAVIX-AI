@@ -42,6 +42,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { TransformationSlider } from "@/components/dashboard/TransformationSlider";
+import { debounce } from "@/utils/debounce";
 
 interface Project {
   id: string;
@@ -123,8 +124,31 @@ const ProjectListComponent = memo(({
           <Loader className="w-4 h-4 animate-spin" />
         </div>
       ) : filteredProjects.length === 0 ? (
-        <div className="p-4 text-center text-sm text-muted-foreground">
-          {searchQuery ? "No projects found" : "No projects yet. Create one!"}
+        <div className="p-4">
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+              <Plus className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="font-semibold mb-2">
+              {searchQuery ? "No projects found" : "No projects yet"}
+            </h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              {searchQuery 
+                ? "Try adjusting your search terms" 
+                : "Create your first project to get started"
+              }
+            </p>
+            {!searchQuery && (
+              <Button 
+                size="sm" 
+                onClick={handleOpenCreateDialog}
+                className="gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create Project
+              </Button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="p-2 space-y-1">
@@ -137,7 +161,7 @@ const ProjectListComponent = memo(({
                 selectedProjectId === project.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
               )}
             >
-              <div className="w-10 h-10 rounded bg-linear-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0">
                 <span className="text-xs font-bold">{project.name.charAt(0).toUpperCase()}</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -240,12 +264,26 @@ export default function ProjectsPage() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
+
+  // Debounce search query
+  useEffect(() => {
+    const handler = debounce((value: string) => {
+      setDebouncedSearchQuery(value);
+    }, 300);
+
+    handler(searchQuery);
+
+    return () => {
+      // Cleanup is handled by the debounce function
+    };
+  }, [searchQuery]);
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "bot"; content: string }>>([
     { role: "bot", content: "Hello! I'm here to help you with your project. Ask me anything about design, materials, or transformations!" }
@@ -279,10 +317,10 @@ export default function ProjectsPage() {
   
   const filteredProjects = useMemo(() => 
     projects.filter(p =>
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase())
+      p.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+      p.description.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
     ),
-    [projects, searchQuery]
+    [projects, debouncedSearchQuery]
   );
 
   const handleCreateProject = useCallback(async () => {
@@ -541,7 +579,7 @@ export default function ProjectsPage() {
               {isMobile && (
                 <Sheet open={isProjectListOpen} onOpenChange={setIsProjectListOpen}>
                   <SheetTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><Menu className="w-4 h-4" /></Button></SheetTrigger>
-                  <SheetContent side="left" className="p-0 w-72">
+                  <SheetContent side="left" className="p-0 w-80 sm:w-96">
                     <ProjectListComponent
                       searchQuery={searchQuery}
                       setSearchQuery={setSearchQuery}

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import type { File } from 'multer';
+import { getJWTSecret } from '../config/secrets.js';
+import { Errors } from './errorHandler.js';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -15,12 +17,11 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({ error: 'Missing or invalid authorization header' });
-      return;
+      return next(Errors.unauthorized('Missing or invalid authorization header'));
     }
 
     const token = authHeader.substring(7);
-    const secret = process.env.JWT_SECRET || 'secret';
+    const secret = getJWTSecret();
 
     const decoded = jwt.verify(token, secret) as { userId: string; email: string };
     
@@ -31,6 +32,9 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Invalid token' });
+    if (error instanceof jwt.JsonWebTokenError) {
+      return next(Errors.invalidToken());
+    }
+    return next(error);
   }
 }

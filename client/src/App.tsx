@@ -6,10 +6,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/home";
 import LoginPage from "@/pages/login";
 import SignupPage from "@/pages/signup";
+import ForgotPasswordPage from "@/pages/forgot-password";
 import AuthCallbackPage from "@/pages/auth-callback";
 import SharePage from "@/pages/share";
 import DashboardPage from "@/pages/dashboard";
@@ -28,6 +30,7 @@ function Router() {
       <Route path="/" component={HomePage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/signup" component={SignupPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
       <Route path="/auth/callback" component={AuthCallbackPage} />
       <Route path="/share/:shareId" component={SharePage} />
       <Route path="/dashboard">
@@ -82,16 +85,18 @@ function Router() {
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="light" storageKey="spavix-theme">
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <AuthProvider>
-            <Toaster />
-            <Router />
-          </AuthProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="light" storageKey="spavix-theme">
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <AuthProvider>
+              <Toaster />
+              <Router />
+            </AuthProvider>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

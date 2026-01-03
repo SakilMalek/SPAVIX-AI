@@ -1,12 +1,26 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TransformationSlider } from "@/components/dashboard/TransformationSlider";
-import { Clock, Download, Share2, Trash2, Loader, RefreshCw, Copy, Check, Link2 } from "lucide-react";
+import { 
+  Clock, 
+  Search, 
+  Download, 
+  Share2, 
+  Trash2, 
+  Link2, 
+  Loader,
+  RefreshCw, 
+  Copy, 
+  Check, 
+  ChevronDown
+} from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { TransformationCardSkeleton } from "@/components/SkeletonLoader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,20 +49,62 @@ interface Transformation {
   created_at: string;
 }
 
-const fetchTransformations = async (): Promise<Transformation[]> => {
+interface HistoryResponse {
+  generationId: string;
+  totalVersions: number;
+  currentPage: number;
+  pageSize: number;
+  history: Array<{
+    id: string;
+    version_number: number;
+    style: string;
+    room_type: string;
+    status: string;
+    created_at: string;
+  }>;
+}
+
+const fetchTransformations = async (limit: number = 50, offset: number = 0): Promise<Transformation[]> => {
   const token = localStorage.getItem("token");
   const { getApiUrl } = await import("@/config/api");
-  const response = await fetch(getApiUrl("/api/generations"), {
+  
+  const startTime = performance.now();
+  console.log(`[HISTORY] Starting to fetch transformations (limit=${limit}, offset=${offset})`);
+  
+  // First, get all generations (metadata only, no images)
+  const fetchStart = performance.now();
+  const response = await fetch(getApiUrl(`/api/generations?limit=${limit}&offset=${offset}`), {
     headers: {
       "Authorization": `Bearer ${token}`,
     },
   });
+  const fetchDuration = performance.now() - fetchStart;
+  console.log(`[HISTORY] Fetch request completed in ${fetchDuration.toFixed(2)}ms`);
 
   if (!response.ok) {
     throw new Error("Failed to load transformation history");
   }
 
-  return response.json();
+  const parseStart = performance.now();
+  const data = await response.json();
+  const parseDuration = performance.now() - parseStart;
+  console.log(`[HISTORY] JSON parsing completed in ${parseDuration.toFixed(2)}ms, received ${data.length} items`);
+  
+  // Return metadata immediately without waiting for images
+  // Images will be loaded on-demand when user views them
+  const result = data.map((gen: any) => ({
+    id: gen.id,
+    style: gen.style,
+    room_type: gen.room_type,
+    created_at: gen.created_at,
+    before_image_url: "", // Will be loaded on-demand
+    after_image_url: "", // Will be loaded on-demand
+  }));
+  
+  const totalDuration = performance.now() - startTime;
+  console.log(`[HISTORY] Total fetch time: ${totalDuration.toFixed(2)}ms`);
+  
+  return result;
 };
 
 const fetchProjects = async () => {
@@ -76,9 +132,16 @@ export default function HistoryPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [isLinking, setIsLinking] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(0);
+  const pageSize = 50;
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStyle, setFilterStyle] = useState<string>("");
+  const [filterRoomType, setFilterRoomType] = useState<string>("");
+
   const { data: transformations = [], isLoading, error, refetch } = useQuery({
-    queryKey: ["transformations"],
-    queryFn: fetchTransformations,
+    queryKey: ["transformations", currentPage],
+    queryFn: () => fetchTransformations(pageSize, currentPage * pageSize),
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes (formerly cacheTime)
     retry: 2,
@@ -88,6 +151,30 @@ export default function HistoryPage() {
     queryKey: ["projects"],
     queryFn: fetchProjects,
   });
+
+  // Filter and search transformations
+  const filteredTransformations = useMemo(() => {
+    return transformations.filter((t) => {
+      const matchesSearch = searchQuery === "" || 
+        t.style.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.room_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        new Date(t.created_at).toLocaleDateString().includes(searchQuery);
+      
+      const matchesStyle = filterStyle === "" || t.style === filterStyle;
+      const matchesRoomType = filterRoomType === "" || t.room_type === filterRoomType;
+      
+      return matchesSearch && matchesStyle && matchesRoomType;
+    });
+  }, [transformations, searchQuery, filterStyle, filterRoomType]);
+
+  // Get unique styles and room types for filter dropdowns
+  const uniqueStyles = useMemo(() => {
+    return Array.from(new Set(transformations.map(t => t.style)));
+  }, [transformations]);
+
+  const uniqueRoomTypes = useMemo(() => {
+    return Array.from(new Set(transformations.map(t => t.room_type)));
+  }, [transformations]);
 
   if (error) {
     toast.error("Failed to load transformation history");
@@ -290,7 +377,7 @@ export default function HistoryPage() {
           </div>
           <div className="flex items-center gap-4">
             <Badge variant="outline" className="px-3 py-1">
-              <Clock className="w-3 h-3 mr-2" /> {transformations.length} Transformations
+              <Clock className="w-3 h-3 mr-2" /> {filteredTransformations.length} Transformations
             </Badge>
             <Button 
               variant="outline" 
@@ -305,9 +392,54 @@ export default function HistoryPage() {
           </div>
         </div>
 
+        {/* Search and Filter Bar */}
+        <div className="mb-8 space-y-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by style, room type, or date..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={filterStyle || "none"} onValueChange={(value) => setFilterStyle(value === "none" ? "" : value)}>
+              <SelectTrigger className="w-full md:w-40">
+                <SelectValue placeholder="Filter by style" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">All Styles</SelectItem>
+                {uniqueStyles.map((style) => (
+                  <SelectItem key={style} value={style}>
+                    {style}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterRoomType || "none"} onValueChange={(value) => setFilterRoomType(value === "none" ? "" : value)}>
+              <SelectTrigger className="w-full md:w-40">
+                <SelectValue placeholder="Filter by room" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">All Rooms</SelectItem>
+                {uniqueRoomTypes.map((roomType) => (
+                  <SelectItem key={roomType} value={roomType}>
+                    {roomType}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader className="w-8 h-8 animate-spin text-primary" />
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <TransformationCardSkeleton key={i} />
+              ))}
+            </div>
           </div>
         ) : transformations.length === 0 ? (
           <Card className="glass-panel border-none shadow-xl">
@@ -317,14 +449,23 @@ export default function HistoryPage() {
               <p className="text-muted-foreground">Start creating transformations to see them here</p>
             </CardContent>
           </Card>
+        ) : filteredTransformations.length === 0 ? (
+          <Card className="glass-panel border-none shadow-xl">
+            <CardContent className="p-12 text-center">
+              <Search className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">No results found</h3>
+              <p className="text-muted-foreground">Try adjusting your search or filters</p>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {transformations.map((item) => (
+            {filteredTransformations.map((item) => (
               <Card key={item.id} className="glass-panel overflow-hidden border-none shadow-xl group">
                 <CardContent className="p-0 aspect-video relative">
                   <TransformationSlider 
                     beforeImage={item.before_image_url}
                     afterImage={item.after_image_url}
+                    generationId={item.id}
                   />
                 </CardContent>
                 <CardFooter className="p-6 flex justify-between items-center bg-card/50">
@@ -377,6 +518,25 @@ export default function HistoryPage() {
                 </CardFooter>
               </Card>
             ))}
+          </div>
+        )}
+          
+        {/* Load More Button */}
+        {transformations.length === pageSize && (
+          <div className="flex justify-center mt-8">
+            <Button 
+              variant="outline" 
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              disabled={isLoading}
+              className="gap-2"
+            >
+              {isLoading ? (
+                <Loader className="w-4 h-4 animate-spin" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+              Load More
+            </Button>
           </div>
         )}
 
@@ -489,6 +649,31 @@ export default function HistoryPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        )}
+
+        {/* Pagination Controls */}
+        {transformations.length > 0 && (
+          <div className="flex items-center justify-center gap-4 mt-12 pt-8 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+              disabled={currentPage === 0 || isLoading}
+            >
+              Previous
+            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Page <span className="font-semibold">{currentPage + 1}</span>
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(currentPage + 1)}
+              disabled={transformations.length < pageSize || isLoading}
+            >
+              Next
+            </Button>
+          </div>
         )}
       </main>
     </div>

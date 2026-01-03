@@ -19,34 +19,67 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState("avatar-1");
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
-  const handleGoogleClick = () => {
+  const handleGoogleClick = async () => {
+    // Generate a random state for CSRF protection
+    const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    
+    // Store state in session storage for verification after redirect
+    sessionStorage.setItem('oauth_state', state);
+    
     // Redirect to Google OAuth endpoint
-    const clientId = "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
     const redirectUri = `${window.location.origin}/api/auth/google/callback`;
     const scope = "openid email profile";
     const responseType = "code";
     
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}`;
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
     
     window.location.href = googleAuthUrl;
+  };
+
+  const getPasswordStrength = (pwd: string) => {
+    if (pwd.length < 6) return { level: 'weak', color: 'bg-red-500', width: 'w-1/3' };
+    if (pwd.length < 10 || !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(pwd)) return { level: 'medium', color: 'bg-yellow-500', width: 'w-2/3' };
+    return { level: 'strong', color: 'bg-green-500', width: 'w-full' };
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: typeof errors = {};
+
+    if (!email) {
+      newErrors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+
+    if (!password) {
+      newErrors.password = "Password is required";
+    } else if (password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+    }
+
+    if (!confirmPassword) {
+      newErrors.confirmPassword = "Please confirm your password";
+    } else if (password !== confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (!validateForm()) {
       return;
     }
 
     try {
       setIsLoading(true);
+      setErrors({});
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl("/api/auth/signup"), {
         method: "POST",
@@ -73,11 +106,11 @@ export default function SignupPage() {
 
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-10 h-10 bg-linear-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, rgb(147, 51, 234), rgb(37, 99, 235))' }}>
               <span className="text-white font-bold text-lg">S</span>
             </div>
           </div>
@@ -94,9 +127,17 @@ export default function SignupPage() {
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email) setErrors({ ...errors, email: undefined });
+                }}
+                disabled={isLoading}
+                className={errors.email ? "border-destructive" : ""}
                 required
               />
+              {errors.email && (
+                <p className="text-xs text-destructive font-medium">{errors.email}</p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Password</label>
@@ -104,9 +145,27 @@ export default function SignupPage() {
                 type="password"
                 placeholder="At least 6 characters"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errors.password) setErrors({ ...errors, password: undefined });
+                }}
+                disabled={isLoading}
+                className={errors.password ? "border-destructive" : ""}
                 required
               />
+              {errors.password && (
+                <p className="text-xs text-destructive font-medium">{errors.password}</p>
+              )}
+              {password && (
+                <div className="space-y-1">
+                  <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
+                    <div className={`h-full transition-all ${getPasswordStrength(password).color} ${getPasswordStrength(password).width}`} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Password strength: <span className="font-medium">{getPasswordStrength(password).level}</span>
+                  </p>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Confirm Password</label>
@@ -114,14 +173,22 @@ export default function SignupPage() {
                 type="password"
                 placeholder="Re-enter your password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: undefined });
+                }}
+                disabled={isLoading}
+                className={errors.confirmPassword ? "border-destructive" : ""}
                 required
               />
+              {errors.confirmPassword && (
+                <p className="text-xs text-destructive font-medium">{errors.confirmPassword}</p>
+              )}
             </div>
 
             <div className="space-y-3 pt-2">
               <label className="text-sm font-medium">Choose Avatar</label>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {AVATARS.map((avatar) => (
                   <button
                     key={avatar.id}

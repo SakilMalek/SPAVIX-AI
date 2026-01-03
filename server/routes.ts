@@ -9,6 +9,7 @@ import { materialsRoutes } from "./routes/materials.js";
 import { stylesRoutes } from "./routes/styles.js";
 import { projectRoutes } from "./routes/projects.js";
 import { chatRoutes } from "./routes/chat.js";
+import { analyticsRoutes } from "./routes/analytics.js";
 import { Database } from "./db.js";
 
 export async function registerRoutes(
@@ -29,6 +30,7 @@ export async function registerRoutes(
   app.use("/api/styles", stylesRoutes);
   app.use("/api/projects", projectRoutes);
   app.use("/api/chat", chatRoutes);
+  app.use("/api/analytics", analyticsRoutes);
 
   return httpServer;
 }

@@ -68,14 +68,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       const { getApiUrl } = await import("@/config/api");
-      await fetch(getApiUrl("/api/logout"), { 
+      await fetch(getApiUrl("/api/auth/logout"), { 
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
         credentials: "include",
       });
-      setUser(null);
-      setLocation("/login");
     } catch (error) {
       console.error("Logout failed:", error);
+    } finally {
+      // Clear all auth data from localStorage
+      localStorage.removeItem("token");
+      localStorage.removeItem("userEmail");
+      localStorage.removeItem("userName");
+      localStorage.removeItem("userProfilePicture");
+      
+      // Update state and redirect
+      setUser(null);
+      setLocation("/login");
     }
   };
 

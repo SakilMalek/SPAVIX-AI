@@ -27,8 +27,15 @@ export function Navbar() {
   const logoSrc = theme === "dark" ? "/logo-dark.png" : "/logo-light.png";
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md supports-backdrop-filter:bg-background/60">
-      <div className="container flex h-16 items-center px-4 mx-auto">
+    <>
+      <a 
+        href="#main-content" 
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-primary text-primary-foreground px-4 py-2 rounded-md z-50"
+      >
+        Skip to main content
+      </a>
+      <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md supports-backdrop-filter:bg-background/60">
+        <div className="container flex h-16 items-center px-4 mx-auto">
         <Link href="/">
           <div className="mr-8 flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity">
             <img 
@@ -42,25 +49,25 @@ export function Navbar() {
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
           <Link href="/dashboard">
-            <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/dashboard' ? 'text-foreground' : 'text-foreground/60'}`}>
+            <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/dashboard' ? 'text-foreground font-semibold' : 'text-foreground/60'}`}>
               <LayoutGrid className="w-4 h-4" />
               Dashboard
             </span>
           </Link>
           <Link href="/projects">
-            <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/projects' ? 'text-foreground' : 'text-foreground/60'}`}>
+            <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/projects' ? 'text-foreground font-semibold' : 'text-foreground/60'}`}>
               <FolderKanban className="w-4 h-4" />
               Projects
             </span>
           </Link>
           <Link href="/gallery">
-            <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/gallery' ? 'text-foreground' : 'text-foreground/60'}`}>
+            <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/gallery' ? 'text-foreground font-semibold' : 'text-foreground/60'}`}>
               <ImageIcon className="w-4 h-4" />
               Gallery
             </span>
           </Link>
           <Link href="/pricing">
-            <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/pricing' ? 'text-foreground' : 'text-foreground/60'}`}>
+            <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/pricing' ? 'text-foreground font-semibold' : 'text-foreground/60'}`}>
               <Tag className="w-4 h-4" />
               Pricing
             </span>
@@ -106,7 +113,7 @@ export function Navbar() {
                      </Avatar>
                      <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold truncate">{user?.username}</p>
-                        <p className="text-xs text-muted-foreground truncate">{user?.profilePicture}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user?.email || "User"}</p>
                      </div>
                   </div>
 
@@ -127,13 +134,14 @@ export function Navbar() {
         </div>
       </div>
     </header>
+    </>
   );
 }
 
 function MobileNavLink({ href, children, isActive }: { href: string; children: React.ReactNode; isActive?: boolean }) {
   return (
     <Link href={href}>
-      <span className={`flex items-center px-2 py-3 text-sm font-medium transition-colors hover:bg-accent rounded-lg cursor-pointer ${isActive ? 'text-foreground bg-accent/50' : 'text-foreground/60'}`}>
+      <span className={`flex items-center px-2 py-3 text-sm font-medium transition-colors hover:bg-accent rounded-lg cursor-pointer ${isActive ? 'text-foreground font-semibold bg-accent/30' : 'text-foreground/60'}`}>
         {children}
       </span>
     </Link>
@@ -142,6 +150,12 @@ function MobileNavLink({ href, children, isActive }: { href: string; children: R
 
 function UserMenu() {
   const { user, logout } = useAuth();
+  
+  const handleLogout = () => {
+    if (confirm("Are you sure you want to log out?")) {
+      logout();
+    }
+  };
 
   const getAvatarUrl = () => {
     if (!user?.profilePicture) return getAvatarImage("avatar-1");
@@ -180,7 +194,7 @@ function UserMenu() {
             <span>Transformation History</span>
           </DropdownMenuItem>
         </Link>
-        <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={logout}>
+        <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>
@@ -191,11 +205,18 @@ function UserMenu() {
 
 function MobileLogoutButton() {
   const { logout } = useAuth();
+  
+  const handleLogout = () => {
+    if (confirm("Are you sure you want to log out?")) {
+      logout();
+    }
+  };
+  
   return (
     <Button 
       variant="ghost" 
       className="justify-start text-destructive hover:text-destructive hover:bg-destructive/10 w-full"
-      onClick={logout}
+      onClick={handleLogout}
     >
       <LogOut className="mr-2 h-4 w-4" />
       Log out

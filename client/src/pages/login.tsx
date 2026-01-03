@@ -18,29 +18,55 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
-  const handleGoogleClick = () => {
+  const handleGoogleClick = async () => {
+    // Generate a random state for CSRF protection
+    const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    
+    // Store state in session storage for verification after redirect
+    sessionStorage.setItem('oauth_state', state);
+    
     // Redirect to Google OAuth endpoint
-    const clientId = "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
     const redirectUri = `${window.location.origin}/api/auth/google/callback`;
     const scope = "openid email profile";
     const responseType = "code";
     
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}`;
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
     
     window.location.href = googleAuthUrl;
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: typeof errors = {};
+
+    if (!email) {
+      newErrors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+
+    if (!password) {
+      newErrors.password = "Password is required";
+    } else if (password.length < 6) {
+      newErrors.password = "Password must be at least 6 characters";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !password) {
-      toast.error("Please fill in all fields");
+    if (!validateForm()) {
       return;
     }
 
     try {
       setIsLoading(true);
+      setErrors({});
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl("/api/auth/login"), {
         method: "POST",
@@ -74,11 +100,11 @@ export default function LoginPage() {
 
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-10 h-10 bg-linear-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, rgb(147, 51, 234), rgb(37, 99, 235))' }}>
               <span className="text-white font-bold text-lg">S</span>
             </div>
           </div>
@@ -95,9 +121,17 @@ export default function LoginPage() {
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email) setErrors({ ...errors, email: undefined });
+                }}
+                disabled={isLoading}
+                className={errors.email ? "border-destructive" : ""}
                 required
               />
+              {errors.email && (
+                <p className="text-xs text-destructive font-medium">{errors.email}</p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Password</label>
@@ -105,13 +139,30 @@ export default function LoginPage() {
                 type="password"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errors.password) setErrors({ ...errors, password: undefined });
+                }}
+                disabled={isLoading}
+                className={errors.password ? "border-destructive" : ""}
                 required
               />
+              {errors.password && (
+                <p className="text-xs text-destructive font-medium">{errors.password}</p>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="rounded" />
+                Remember me
+              </label>
+              <a href="/forgot-password" className="text-sm text-purple-600 hover:text-purple-700">
+                Forgot password?
+              </a>
             </div>
             <Button
               type="submit"
-              className="w-full bg-linear-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
               disabled={isLoading}
             >
               {isLoading ? "Signing in..." : "Sign In"}

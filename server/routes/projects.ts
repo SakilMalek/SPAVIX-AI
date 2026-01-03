@@ -1,6 +1,10 @@
 import { Router, Response } from 'express';
 import { Database } from '../db';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { generateSecureShareId } from '../utils/shareId';
+import { createProjectSchema, updateProjectSchema, searchProjectSchema, paginationSchema, validateRequest } from '../middleware/validation';
+import { Errors, asyncHandler } from '../middleware/errorHandler.js';
+import { logger } from '../utils/logger.js';
 
 export const projectRoutes = Router();
 
@@ -15,26 +19,20 @@ interface UpdateProjectRequest {
 }
 
 // GET all projects for the authenticated user
-projectRoutes.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
-
-    const projects = await Database.getProjects(req.user.id, limit, offset);
-
-    console.log('Returning projects:', projects.length, 'items');
-
-    res.json(projects);
-  } catch (error) {
-    console.error('Get projects error:', error);
-    res.status(500).json({ error: 'Failed to fetch projects' });
+projectRoutes.get('/', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw Errors.unauthorized();
   }
-});
+
+  const validated = validateRequest(paginationSchema, req.query);
+  const { limit, offset } = validated;
+
+  const projects = await Database.getProjects(req.user.id, limit, offset);
+
+  logger.info('Projects retrieved', { userId: req.user.id, count: projects.length });
+
+  res.json(projects);
+}));
 
 // GET single project by ID
 projectRoutes.get('/:id', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
@@ -66,12 +64,8 @@ projectRoutes.post('/', authMiddleware, async (req: AuthRequest, res: Response):
       return;
     }
 
-    const { name, description } = req.body as CreateProjectRequest;
-
-    if (!name || !name.trim()) {
-      res.status(400).json({ error: 'Project name is required' });
-      return;
-    }
+    const validated = validateRequest(createProjectSchema, req.body);
+    const { name, description } = validated;
 
     const project = await Database.createProject(req.user.id, name, description || '');
 
@@ -92,12 +86,8 @@ projectRoutes.put('/:id', authMiddleware, async (req: AuthRequest, res: Response
       return;
     }
 
-    const { name, description } = req.body as UpdateProjectRequest;
-
-    if (!name || !name.trim()) {
-      res.status(400).json({ error: 'Project name is required' });
-      return;
-    }
+    const validated = validateRequest(updateProjectSchema, req.body);
+    const { name, description } = validated;
 
     const project = await Database.updateProject(req.params.id, req.user.id, name, description || '');
 
@@ -147,14 +137,10 @@ projectRoutes.get('/search/:query', authMiddleware, async (req: AuthRequest, res
       return;
     }
 
-    const searchTerm = req.params.query;
+    const validated = validateRequest(searchProjectSchema, { query: req.params.query });
+    const { query } = validated;
 
-    if (!searchTerm || !searchTerm.trim()) {
-      res.status(400).json({ error: 'Search term is required' });
-      return;
-    }
-
-    const projects = await Database.searchProjects(req.user.id, searchTerm);
+    const projects = await Database.searchProjects(req.user.id, query);
 
     console.log('Search results:', projects.length, 'projects found');
 
@@ -187,8 +173,8 @@ projectRoutes.post('/:id/share', authMiddleware, async (req: AuthRequest, res: R
       return;
     }
 
-    // Generate unique share ID
-    const shareId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    // Generate cryptographically secure share ID
+    const shareId = generateSecureShareId();
 
     const share = await Database.createProjectShare(req.params.id, req.user.id, shareId);
 

@@ -8,28 +8,25 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
-    const userStr = params.get("user");
+    const email = params.get("email");
+    const name = params.get("name");
+    const picture = params.get("picture");
 
-    console.log("Auth callback - token:", !!token, "user:", !!userStr);
+    console.log("Auth callback - token:", !!token, "email:", email);
 
     if (token) {
       try {
         localStorage.setItem("token", token);
         console.log("Token stored in localStorage");
         
-        if (userStr) {
-          try {
-            const user = JSON.parse(decodeURIComponent(userStr));
-            console.log("User data parsed:", user);
-            if (user.name) {
-              localStorage.setItem("userName", user.name);
-            }
-            if (user.picture) {
-              localStorage.setItem("userProfilePicture", user.picture);
-            }
-          } catch (e) {
-            console.error("Failed to parse user data:", e);
-          }
+        if (email) {
+          localStorage.setItem("userEmail", email);
+        }
+        if (name) {
+          localStorage.setItem("userName", name);
+        }
+        if (picture) {
+          localStorage.setItem("userProfilePicture", picture);
         }
 
         toast.success("Logged in successfully!");
@@ -54,7 +51,7 @@ export default function AuthCallbackPage() {
   }, [setLocation]);
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, rgb(245, 243, 255), rgb(219, 234, 254))' }}>
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
         <p className="text-gray-600">Completing authentication...</p>

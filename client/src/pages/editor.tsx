@@ -43,11 +43,22 @@ export default function EditorPage() {
   const imageRef = useRef<HTMLDivElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (event) => setImage(event.target?.result as string);
-      reader.readAsDataURL(e.target.files[0]);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("File must be under 10MB");
+      return;
     }
+    
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error("Only JPG, PNG, and WebP are supported");
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (event) => setImage(event.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
   const applyFilters = () => {
@@ -211,37 +222,49 @@ export default function EditorPage() {
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <LabelWithIcon icon={<Sun className="w-4 h-4" />} label="Brightness" />
-                <span className="text-xs font-mono">{brightness}%</span>
+                <label htmlFor="brightness" className="text-sm font-medium flex items-center gap-2">
+                  <Sun className="w-4 h-4" />
+                  Brightness: {brightness}%
+                </label>
               </div>
               <Slider 
+                id="brightness"
                 value={[brightness]} 
                 min={0} max={200} step={1}
                 onValueChange={([v]) => handleBrightnessChange(v)}
+                aria-label="Adjust brightness"
               />
             </div>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <LabelWithIcon icon={<Contrast className="w-4 h-4" />} label="Contrast" />
-                <span className="text-xs font-mono">{contrast}%</span>
+                <label htmlFor="contrast" className="text-sm font-medium flex items-center gap-2">
+                  <Contrast className="w-4 h-4" />
+                  Contrast: {contrast}%
+                </label>
               </div>
               <Slider 
+                id="contrast"
                 value={[contrast]} 
                 min={0} max={200} step={1}
                 onValueChange={([v]) => handleContrastChange(v)}
+                aria-label="Adjust contrast"
               />
             </div>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <LabelWithIcon icon={<Droplets className="w-4 h-4" />} label="Saturation" />
-                <span className="text-xs font-mono">{saturation}%</span>
+                <label htmlFor="saturation" className="text-sm font-medium flex items-center gap-2">
+                  <Droplets className="w-4 h-4" />
+                  Saturation: {saturation}%
+                </label>
               </div>
               <Slider 
+                id="saturation"
                 value={[saturation]} 
                 min={0} max={200} step={1}
                 onValueChange={([v]) => handleSaturationChange(v)}
+                aria-label="Adjust saturation"
               />
             </div>
 

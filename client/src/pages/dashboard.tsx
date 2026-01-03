@@ -5,12 +5,13 @@ import { UploadPanel } from "@/components/dashboard/UploadPanel";
 import { StyleSelector } from "@/components/dashboard/StyleSelector";
 import { MaterialSelector } from "@/components/dashboard/MaterialSelector";
 import { Button } from "@/components/ui/button";
-import { Wand2, ShoppingBag, Download, Share2, Sparkles, RefreshCcw, Edit3, ChevronUp, ChevronDown } from "lucide-react";
+import { Wand2, ShoppingBag, Download, Share2, Sparkles, RefreshCcw, Edit3, ChevronUp, ChevronDown, Upload, Clock } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { ProductSidebar } from "@/components/dashboard/ProductSidebar";
 import { TransformationSlider } from "@/components/dashboard/TransformationSlider";
 import { ShareModal } from "@/components/ShareModal";
+import { EmptyState } from "@/components/EmptyState";
 import { Link } from "wouter";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -38,7 +39,30 @@ export default function DashboardPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [rateLimitUntil, setRateLimitUntil] = useState<number | null>(null);
   const [isProductSidebarOpen, setIsProductSidebarOpen] = useState(false);
+
+  // Calculate remaining time for rate limit
+  const getRateLimitRemainingTime = () => {
+    if (!rateLimitUntil) return null;
+    const remaining = Math.ceil((rateLimitUntil - Date.now()) / 1000);
+    return remaining > 0 ? remaining : null;
+  };
+
+  // Update rate limit every second
+  useEffect(() => {
+    if (!rateLimitUntil) return;
+
+    const interval = setInterval(() => {
+      const remaining = getRateLimitRemainingTime();
+      if (!remaining) {
+        setRateLimitUntil(null);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [rateLimitUntil]);
   const [isMobileControlsOpen, setIsMobileControlsOpen] = useState(true);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
@@ -76,9 +100,26 @@ export default function DashboardPage() {
   };
 
   const handleGenerate = async () => {
-    if (!uploadedImage) return;
+    if (!uploadedImage) {
+      toast.error("Please upload an image first");
+      return;
+    }
+
+    // Check if rate limited
+    const remainingTime = getRateLimitRemainingTime();
+    if (remainingTime) {
+      const minutes = Math.ceil(remainingTime / 60);
+      const seconds = remainingTime % 60;
+      toast.error(`Please wait ${minutes}:${seconds.toString().padStart(2, '0')} before trying again`);
+      return;
+    }
+
     setIsGenerating(true);
-    if (isMobile) setIsMobileControlsOpen(false);
+    setGenerationError(null);
+    if (isMobile) {
+      setIsMobileControlsOpen(false);
+      toast.info("Controls minimized. Tap to expand.");
+    }
     
     try {
       const token = localStorage.getItem('token');
@@ -112,7 +153,26 @@ export default function DashboardPage() {
       if (!response.ok) {
         const text = await response.text();
         console.error('Error response:', text);
-        toast.error(`Generation failed: ${response.status}`);
+        
+        let errorMessage = text ? text : `Generation failed: ${response.status}`;
+        
+        // Handle rate limit error specifically
+        if (response.status === 429) {
+          try {
+            const errorData = JSON.parse(text);
+            const retryAfter = errorData.retryAfter || 600;
+            const minutes = Math.ceil(retryAfter / 60);
+            errorMessage = `Rate limit exceeded. Please wait ${minutes} minute(s) before trying again.`;
+            // Set rate limit timer
+            setRateLimitUntil(Date.now() + (retryAfter * 1000));
+          } catch {
+            errorMessage = "Rate limit exceeded. Please wait a few minutes before trying again.";
+            setRateLimitUntil(Date.now() + (10 * 60 * 1000)); // Default 10 minutes
+          }
+        }
+        
+        setGenerationError(errorMessage);
+        toast.error(errorMessage);
         setIsGenerating(false);
         return;
       }
@@ -238,11 +298,17 @@ export default function DashboardPage() {
       <div className="p-4 md:p-6 border-t bg-card/50 backdrop-blur-sm shrink-0">
         <Button 
           size="lg" 
-          className="w-full h-12 font-semibold rounded-full bg-linear-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-50" 
+          className="w-full h-12 font-semibold rounded-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-50" 
           onClick={handleGenerate} 
-          disabled={isGenerating || !uploadedImage}
+          disabled={isGenerating || !uploadedImage || getRateLimitRemainingTime() !== null}
         >
-          {isGenerating ? <><Sparkles className="mr-2 h-4 w-4 animate-spin" /> Designing...</> : <><Wand2 className="mr-2 h-4 w-4" /> Generate Transformation</>}
+          {isGenerating ? (
+            <><Sparkles className="mr-2 h-4 w-4 animate-spin" /> Designing...</>
+          ) : getRateLimitRemainingTime() !== null ? (
+            <><Clock className="mr-2 h-4 w-4" /> Rate Limited ({Math.ceil(getRateLimitRemainingTime()! / 60)}m)</>
+          ) : (
+            <><Wand2 className="mr-2 h-4 w-4" /> Generate Transformation</>
+          )}
         </Button>
       </div>
     </div>
@@ -252,7 +318,7 @@ export default function DashboardPage() {
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
       <Navbar />
       
-      <main className="flex-1 overflow-hidden relative flex flex-col md:flex-row">
+      <main id="main-content" className="flex-1 overflow-hidden relative flex flex-col md:flex-row">
         {isMobile ? (
           <div className="flex-1 flex flex-col overflow-hidden">
              {/* Mobile Preview Area */}
@@ -276,7 +342,26 @@ export default function DashboardPage() {
                    )}
                 </div>
 
-                {generatedImage && uploadedImage ? (
+                {isGenerating ? (
+                  <div className="w-full h-96 bg-muted animate-pulse rounded-lg flex items-center justify-center">
+                    <div className="text-center">
+                      <Sparkles className="w-8 h-8 mx-auto mb-2 text-primary animate-spin" />
+                      <p className="text-muted-foreground">Generating your design...</p>
+                    </div>
+                  </div>
+                ) : generationError ? (
+                  <div className="w-full h-96 flex items-center justify-center p-4">
+                    <div className="text-center space-y-3">
+                      <div className="w-12 h-12 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
+                        <span className="text-destructive">⚠️</span>
+                      </div>
+                      <p className="text-sm text-destructive font-medium">{generationError}</p>
+                      <Button variant="outline" size="sm" onClick={() => setGenerationError(null)}>
+                        Try Again
+                      </Button>
+                    </div>
+                  </div>
+                ) : generatedImage && uploadedImage ? (
                   <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-xl border border-white/10 group bg-black">
                     <TransformationSlider beforeImage={uploadedImage} afterImage={generatedImage} />
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
@@ -286,13 +371,11 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center p-6 space-y-4 max-w-xs">
-                    <div className="w-16 h-16 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <Sparkles className="w-8 h-8 text-primary" />
-                    </div>
-                    <h2 className="text-xl font-heading font-bold">Design Your Space</h2>
-                    <p className="text-muted-foreground text-xs">Upload a photo to see the AI magic.</p>
-                  </div>
+                  <EmptyState
+                    icon={<Upload className="w-8 h-8 text-primary" />}
+                    title="Design Your Space"
+                    description="Upload a photo of your room to get started with AI-powered design transformations"
+                  />
                 )}
              </div>
 
@@ -300,11 +383,17 @@ export default function DashboardPage() {
              <div className="border-t bg-card shrink-0 flex flex-col p-4">
                 <Button 
                   size="lg" 
-                  className="w-full h-12 font-bold shadow-lg rounded-full bg-linear-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white disabled:opacity-50" 
+                  className="w-full h-12 font-bold shadow-lg rounded-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white disabled:opacity-50" 
                   onClick={handleGenerate} 
-                  disabled={isGenerating || !uploadedImage}
+                  disabled={isGenerating || !uploadedImage || getRateLimitRemainingTime() !== null}
                 >
-                  {isGenerating ? <><Sparkles className="mr-2 h-4 w-4 animate-spin" /> Designing...</> : <><Wand2 className="mr-2 h-4 w-4" /> Generate Transformation</>}
+                  {isGenerating ? (
+                    <><Sparkles className="mr-2 h-4 w-4 animate-spin" /> Designing...</>
+                  ) : getRateLimitRemainingTime() !== null ? (
+                    <><Clock className="mr-2 h-4 w-4" /> Rate Limited ({Math.ceil(getRateLimitRemainingTime()! / 60)}m)</>
+                  ) : (
+                    <><Wand2 className="mr-2 h-4 w-4" /> Generate Transformation</>
+                  )}
                 </Button>
                 <Collapsible open={isMobileControlsOpen} onOpenChange={setIsMobileControlsOpen}>
                   <CollapsibleTrigger asChild>
@@ -334,7 +423,26 @@ export default function DashboardPage() {
                   {generatedImage && <Button variant="outline" size="sm" className="bg-background/80 shadow-sm" onClick={handleExport}><Download className="w-4 h-4 mr-2" /> Export</Button>}
                </div>
                <div className="w-full h-full flex flex-col items-center justify-center p-8 overflow-hidden">
-                  {generatedImage && uploadedImage ? (
+                  {isGenerating ? (
+                    <div className="w-full h-96 bg-muted animate-pulse rounded-lg flex items-center justify-center">
+                      <div className="text-center">
+                        <Sparkles className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
+                        <p className="text-muted-foreground text-lg">Generating your design...</p>
+                      </div>
+                    </div>
+                  ) : generationError ? (
+                    <div className="w-full h-96 flex items-center justify-center p-4">
+                      <div className="text-center space-y-4">
+                        <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
+                          <span className="text-destructive text-2xl">⚠️</span>
+                        </div>
+                        <p className="text-destructive font-medium">{generationError}</p>
+                        <Button variant="outline" onClick={() => setGenerationError(null)}>
+                          Try Again
+                        </Button>
+                      </div>
+                    </div>
+                  ) : generatedImage && uploadedImage ? (
                     <div className="relative w-full h-full max-h-[80vh] aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/10 group bg-black">
                       <TransformationSlider beforeImage={uploadedImage} afterImage={generatedImage} />
                       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 transition-all duration-300 z-30">
@@ -344,13 +452,12 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center space-y-6 max-w-lg animate-in fade-in zoom-in duration-500">
-                      <div className="w-32 h-32 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-6 ring-8 ring-primary/5"><Sparkles className="w-12 h-12 text-primary" /></div>
-                      <div className="space-y-2">
-                        <h2 className="text-4xl font-heading font-bold text-foreground">Design Your Dream Space</h2>
-                        <p className="text-muted-foreground text-lg leading-relaxed">Upload a photo of your room, choose a style, and let our AI reimagine your space in seconds.</p>
-                      </div>
-                    </div>
+                    <EmptyState
+                      icon={<Upload className="w-12 h-12 text-primary" />}
+                      title="Design Your Dream Space"
+                      description="Upload a photo of your room, choose a style, and let our AI reimagine your space in seconds."
+                      className="animate-in fade-in zoom-in duration-500"
+                    />
                   )}
                </div>
             </ResizablePanel>

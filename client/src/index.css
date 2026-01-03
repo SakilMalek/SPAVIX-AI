@@ -109,13 +109,13 @@
   --primary-foreground: 210 40% 98%;
   
   --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
+  --secondary-foreground: 0 0% 100%;
   
   --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
+  --muted-foreground: 240 5% 74.9%;
   
   --accent: 240 3.7% 15.9%;
-  --accent-foreground: 0 0% 98%;
+  --accent-foreground: 0 0% 100%;
   
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
@@ -143,6 +143,16 @@
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading font-bold tracking-tight;
+  }
+
+  /* Global Focus States for Accessibility */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
   }
 
   /* Scrollbar Styling - Light Mode */
@@ -206,6 +216,6 @@
     @apply bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-lg;
   }
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-linear-to-r from-primary to-purple-400;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400;
   }
 }

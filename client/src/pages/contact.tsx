@@ -3,6 +3,9 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Mail, Phone, MessageSquare, Send } from "lucide-react";
 import { toast } from "sonner";
 
@@ -27,6 +30,15 @@ export default function ContactPage() {
 
     if (!formData.name || !formData.email || !formData.subject || !formData.message) {
       toast.error("Please fill in all fields");
+      return;
+    }
+
+    const isValidEmail = (email: string) => {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    };
+
+    if (!isValidEmail(formData.email)) {
+      toast.error("Please enter a valid email address");
       return;
     }
 
@@ -117,53 +129,51 @@ export default function ContactPage() {
             <CardContent className="pt-8 pb-8">
               <h2 className="text-2xl font-bold font-heading mb-6">Send us a Message</h2>
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Full Name
-                  </label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
                     type="text"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
                     placeholder="John Doe"
-                    className="w-full px-4 py-2 rounded-lg border border-border/50 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Email</label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
                     type="email"
                     name="email"
                     value={formData.email}
                     onChange={handleInputChange}
                     placeholder="john@example.com"
-                    className="w-full px-4 py-2 rounded-lg border border-border/50 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Subject</label>
-                  <input
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject</Label>
+                  <Input
+                    id="subject"
                     type="text"
                     name="subject"
                     value={formData.subject}
                     onChange={handleInputChange}
                     placeholder="How can we help?"
-                    className="w-full px-4 py-2 rounded-lg border border-border/50 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Message</label>
-                  <textarea
+                <div className="space-y-2">
+                  <Label htmlFor="message">Message</Label>
+                  <Textarea
+                    id="message"
                     name="message"
                     value={formData.message}
                     onChange={handleInputChange}
                     placeholder="Tell us more about your inquiry..."
                     rows={6}
-                    className="w-full px-4 py-2 rounded-lg border border-border/50 bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
                   />
                 </div>
 

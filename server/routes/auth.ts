@@ -89,7 +89,7 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
   try {
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
     const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = `${process.env.API_URL || 'http://localhost:5000'}/api/auth/google/callback`;
+    const redirectUri = `${process.env.API_URL || process.env.FRONTEND_URL || 'http://localhost:5000'}/api/auth/google/callback`;
 
     if (!googleClientId || !googleClientSecret) {
       logger.error('Google OAuth credentials not configured');
@@ -171,8 +171,19 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     );
 
     // Redirect to frontend with token
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5000';
-    res.redirect(`${frontendUrl}/auth/callback?token=${jwtToken}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`);
+    let frontendUrl = process.env.FRONTEND_URL;
+    
+    // If FRONTEND_URL is not set, try to derive it from the request
+    if (!frontendUrl) {
+      const protocol = req.protocol;
+      const host = req.get('host');
+      frontendUrl = `${protocol}://${host}`;
+      logger.info(`FRONTEND_URL not set, derived from request: ${frontendUrl}`);
+    }
+    
+    const callbackUrl = `${frontendUrl}/auth/callback?token=${jwtToken}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`;
+    logger.info(`Redirecting to: ${callbackUrl}`);
+    res.redirect(callbackUrl);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`Google OAuth callback error: ${errorMessage}`);

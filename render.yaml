@@ -20,6 +20,12 @@ services:
         fromDatabase:
           name: spavix-db
           property: connectionString
+      - key: FRONTEND_URL
+        value: https://spavix-vision-api.onrender.com
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
     autoDeploy: true
 
 databases:

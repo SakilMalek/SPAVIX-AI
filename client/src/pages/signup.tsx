@@ -30,9 +30,9 @@ export default function SignupPage() {
     
     // Redirect to Google OAuth endpoint
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
-    // Use backend API URL for OAuth callback
-    const { default: API_BASE_URL } = await import("@/config/api");
-    const redirectUri = `${API_BASE_URL}/api/auth/google/callback`;
+    // Use backend API URL for OAuth callback - must match Google Console exactly
+    const backendUrl = import.meta.env.VITE_API_URL || 'https://spavix-ai.onrender.com';
+    const redirectUri = `${backendUrl}/api/auth/google/callback`;
     const scope = "openid email profile";
     const responseType = "code";
     

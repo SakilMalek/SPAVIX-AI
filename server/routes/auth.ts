@@ -119,8 +119,10 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     });
 
     if (!tokenResponse.ok) {
-      logger.logSecurity('Google OAuth: Token exchange failed', 'medium', { status: tokenResponse.status });
-      res.status(400).json({ error: 'Failed to exchange authorization code' });
+      const errorText = await tokenResponse.text();
+      logger.error(`Google OAuth: Token exchange failed - Status ${tokenResponse.status}: ${errorText}`);
+      logger.info('OAuth debug info', { redirectUri, hasClientId: !!googleClientId, hasClientSecret: !!googleClientSecret });
+      res.status(400).json({ error: 'Failed to exchange authorization code', details: errorText });
       return;
     }
 

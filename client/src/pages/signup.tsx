@@ -30,7 +30,9 @@ export default function SignupPage() {
     
     // Redirect to Google OAuth endpoint
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
-    const redirectUri = `${window.location.origin}/api/auth/google/callback`;
+    // Use backend API URL for OAuth callback
+    const { default: API_BASE_URL } = await import("@/config/api");
+    const redirectUri = `${API_BASE_URL}/api/auth/google/callback`;
     const scope = "openid email profile";
     const responseType = "code";
     

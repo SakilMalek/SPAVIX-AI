@@ -89,7 +89,15 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
   try {
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
     const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = `${process.env.API_URL || process.env.FRONTEND_URL || 'http://localhost:5000'}/api/auth/google/callback`;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.API_URL || 'http://localhost:5000'}/api/auth/google/callback`;
+
+    logger.info('Google OAuth callback initiated', {
+      redirectUri,
+      hasClientId: !!googleClientId,
+      hasClientSecret: !!googleClientSecret,
+      frontendUrl: process.env.FRONTEND_URL,
+      apiUrl: process.env.API_URL
+    });
 
     if (!googleClientId || !googleClientSecret) {
       logger.error('Google OAuth credentials not configured');

@@ -181,6 +181,12 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
       logger.info(`FRONTEND_URL not set, derived from request: ${frontendUrl}`);
     }
     
+    // Ensure the URL is secure for production
+    if (process.env.NODE_ENV === 'production' && frontendUrl.startsWith('http://')) {
+      frontendUrl = frontendUrl.replace('http://', 'https://');
+      logger.info(`Upgraded to HTTPS in production: ${frontendUrl}`);
+    }
+    
     const callbackUrl = `${frontendUrl}/auth/callback?token=${jwtToken}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`;
     logger.info(`Redirecting to: ${callbackUrl}`);
     res.redirect(callbackUrl);

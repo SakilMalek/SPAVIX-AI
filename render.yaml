@@ -21,7 +21,7 @@ services:
           name: spavix-db
           property: connectionString
       - key: FRONTEND_URL
-        value: https://spavix-vision-api.onrender.com
+        value: https://spavix-ai.onrender.com
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

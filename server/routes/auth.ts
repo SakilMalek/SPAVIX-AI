@@ -184,21 +184,16 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     );
 
     // Redirect to frontend with token
-    let frontendUrl = process.env.FRONTEND_URL;
-    
-    // If FRONTEND_URL is not set, try to derive it from the request
-    if (!frontendUrl) {
-      const protocol = req.protocol;
-      const host = req.get('host');
-      frontendUrl = `${protocol}://${host}`;
-      logger.info(`FRONTEND_URL not set, derived from request: ${frontendUrl}`);
-    }
+    // IMPORTANT: Must use Vercel frontend URL, not the backend's own URL
+    let frontendUrl = process.env.FRONTEND_URL || 'https://spavix-ai.vercel.app';
     
     // Ensure the URL is secure for production
     if (process.env.NODE_ENV === 'production' && frontendUrl.startsWith('http://')) {
       frontendUrl = frontendUrl.replace('http://', 'https://');
       logger.info(`Upgraded to HTTPS in production: ${frontendUrl}`);
     }
+    
+    logger.info(`Redirecting to frontend: ${frontendUrl}`);
     
     const callbackUrl = `${frontendUrl}/auth/callback?token=${jwtToken}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`;
     logger.info(`Redirecting to: ${callbackUrl}`);

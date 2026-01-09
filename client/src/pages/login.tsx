@@ -28,25 +28,14 @@ export default function LoginPage() {
     sessionStorage.setItem('oauth_state', state);
     
     // Redirect to Google OAuth endpoint
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
-    // Use backend API URL for OAuth callback - MUST be absolute URL and match Google Console exactly
-    let backendUrl = import.meta.env.VITE_API_URL;
-    if (!backendUrl) {
-      backendUrl = 'https://spavix-ai.onrender.com';
-    }
-    // Ensure it's an absolute URL
-    if (!backendUrl.startsWith('http')) {
-      backendUrl = `https://${backendUrl}`;
-    }
-    const redirectUri = `${backendUrl}/api/auth/google/callback`;
+    const clientId = "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
+    // HARDCODED: OAuth callback MUST go to Render backend, not Vercel frontend
+    const redirectUri = 'https://spavix-ai.onrender.com/api/auth/google/callback';
     const scope = "openid email profile";
     const responseType = "code";
     
-    console.log('OAuth Debug:', { clientId, backendUrl, redirectUri, viteApiUrl: import.meta.env.VITE_API_URL });
-    
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
     
-    console.log('Google Auth URL:', googleAuthUrl);
     window.location.href = googleAuthUrl;
   };
 

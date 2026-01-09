@@ -89,14 +89,17 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
   try {
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
     const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${process.env.API_URL || 'http://localhost:5000'}/api/auth/google/callback`;
+    // IMPORTANT: Must match exactly what frontend sends to Google
+    // Production default must be the same as frontend's default
+    const apiUrl = process.env.API_URL || 'https://spavix-ai.onrender.com';
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${apiUrl}/api/auth/google/callback`;
 
     logger.info('Google OAuth callback initiated', {
       redirectUri,
       hasClientId: !!googleClientId,
       hasClientSecret: !!googleClientSecret,
       frontendUrl: process.env.FRONTEND_URL,
-      apiUrl: process.env.API_URL
+      apiUrl
     });
 
     if (!googleClientId || !googleClientSecret) {

@@ -56,7 +56,7 @@ export function UploadPanel({ onFileSelect, uploadedImage }: UploadPanelProps) {
 
   if (uploadedImage) {
     return (
-      <div className="relative w-full h-64 rounded-xl overflow-hidden border border-border group bg-black">
+      <div className="relative w-full aspect-video sm:aspect-square rounded-xl overflow-hidden border border-border group bg-black">
         <img 
           src={uploadedImage} 
           alt="Preview" 
@@ -65,10 +65,10 @@ export function UploadPanel({ onFileSelect, uploadedImage }: UploadPanelProps) {
             console.error('Image failed to load:', e);
           }}
         />
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4 gap-3">
-          <p className="text-white text-sm font-medium truncate max-w-full px-4">{fileName}</p>
-          <Button variant="destructive" size="sm" onClick={removeFile} className="h-8">
-            <X className="w-4 h-4 mr-2" /> Remove Image
+        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-3 sm:p-4 gap-2 sm:gap-3">
+          <p className="text-white text-xs sm:text-sm font-medium truncate max-w-full px-2 sm:px-4">{fileName}</p>
+          <Button variant="destructive" size="sm" onClick={removeFile} className="h-8 text-xs sm:text-sm">
+            <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" /> Remove
           </Button>
         </div>
       </div>
@@ -78,7 +78,7 @@ export function UploadPanel({ onFileSelect, uploadedImage }: UploadPanelProps) {
   return (
     <div
       className={cn(
-        "relative flex flex-col items-center justify-center w-full h-64 rounded-xl border-2 border-dashed transition-all cursor-pointer bg-muted/30 hover:bg-muted/50",
+        "relative flex flex-col items-center justify-center w-full aspect-video sm:aspect-square rounded-xl border-2 border-dashed transition-all cursor-pointer bg-muted/30 hover:bg-muted/50",
         dragActive ? "border-primary bg-primary/5" : "border-border"
       )}
       onDragEnter={handleDrag}

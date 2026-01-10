@@ -126,24 +126,31 @@ export default function DashboardPage() {
       console.log('Sending generation request with token:', !!token);
       
       const { getApiUrl } = await import("@/config/api");
+      const requestBody: any = {
+        imageUrl: uploadedImage,
+        roomType: 'living-room',
+        style: selectedStyle,
+        materials: {
+          wallColor: wallColor,
+          floorType: floorType,
+          curtainType: 'none',
+          lightingMood: 'natural',
+          accentWall: 'none',
+        },
+      };
+      
+      // Include projectId if one is selected
+      if (selectedProjectId) {
+        requestBody.projectId = selectedProjectId;
+      }
+      
       const response = await fetch(getApiUrl('/api/generations'), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          imageUrl: uploadedImage,
-          roomType: 'living-room',
-          style: selectedStyle,
-          materials: {
-            wallColor: wallColor,
-            floorType: floorType,
-            curtainType: 'none',
-            lightingMood: 'natural',
-            accentWall: 'none',
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('Response status:', response.status);
@@ -181,27 +188,8 @@ export default function DashboardPage() {
       console.log('Generation response:', data);
       setGeneratedImage(data.afterImage);
       
-      // Auto-link to project if one is selected
-      if (selectedProjectId && data.id) {
-        try {
-          const linkResponse = await fetch(`/api/generations/${data.id}/project`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({ projectId: selectedProjectId }),
-          });
-          
-          if (linkResponse.ok) {
-            toast.success('Image generated and linked to project!');
-          } else {
-            toast.success('Image generated successfully!');
-          }
-        } catch (linkError) {
-          console.error('Error linking to project:', linkError);
-          toast.success('Image generated successfully!');
-        }
+      if (selectedProjectId) {
+        toast.success('Image generated and saved to project!');
       } else {
         toast.success('Image generated successfully!');
       }
@@ -227,7 +215,7 @@ export default function DashboardPage() {
     toast.success("Image downloaded!");
   };
 
-  const Controls = () => (
+  const Controls = ({ isMobileCollapsible = false }: { isMobileCollapsible?: boolean }) => (
     <div className="flex flex-col h-full">
       <div className="p-4 md:p-6 space-y-6 flex-1 overflow-y-auto">
         <div className="space-y-1">
@@ -267,11 +255,16 @@ export default function DashboardPage() {
             <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">3</div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Project</h3>
           </div>
-          <Select value={selectedProjectId || "none"} onValueChange={(value) => setSelectedProjectId(value === "none" ? "" : value)}>
+          <Select value={selectedProjectId || "none"} onValueChange={(value) => {
+            setSelectedProjectId(value === "none" ? "" : value);
+            // Prevent scroll jump by maintaining scroll position
+            const scrollPos = window.scrollY;
+            setTimeout(() => window.scrollTo(0, scrollPos), 0);
+          }}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Select a project (optional)" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" sideOffset={5}>
               <SelectItem value="none">No Project</SelectItem>
               {projects.map((project: any) => (
                 <SelectItem key={project.id} value={project.id}>
@@ -295,22 +288,24 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="p-4 md:p-6 border-t bg-card/50 backdrop-blur-sm shrink-0">
-        <Button 
-          size="lg" 
-          className="w-full h-12 font-semibold rounded-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-50" 
-          onClick={handleGenerate} 
-          disabled={isGenerating || !uploadedImage || getRateLimitRemainingTime() !== null}
-        >
-          {isGenerating ? (
-            <><Sparkles className="mr-2 h-4 w-4 animate-spin" /> Designing...</>
-          ) : getRateLimitRemainingTime() !== null ? (
-            <><Clock className="mr-2 h-4 w-4" /> Rate Limited ({Math.ceil(getRateLimitRemainingTime()! / 60)}m)</>
-          ) : (
-            <><Wand2 className="mr-2 h-4 w-4" /> Generate Transformation</>
-          )}
-        </Button>
-      </div>
+      {!isMobileCollapsible && (
+        <div className="p-4 md:p-6 border-t bg-card/50 backdrop-blur-sm shrink-0">
+          <Button 
+            size="lg" 
+            className="w-full h-12 font-semibold rounded-full bg-linear-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-50" 
+            onClick={handleGenerate} 
+            disabled={isGenerating || !uploadedImage || getRateLimitRemainingTime() !== null}
+          >
+            {isGenerating ? (
+              <><Sparkles className="mr-2 h-4 w-4 animate-spin" /> Designing...</>
+            ) : getRateLimitRemainingTime() !== null ? (
+              <><Clock className="mr-2 h-4 w-4" /> Rate Limited ({Math.ceil(getRateLimitRemainingTime()! / 60)}m)</>
+            ) : (
+              <><Wand2 className="mr-2 h-4 w-4" /> Generate Transformation</>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 
@@ -322,41 +317,41 @@ export default function DashboardPage() {
         {isMobile ? (
           <div className="flex-1 flex flex-col overflow-hidden">
              {/* Mobile Preview Area */}
-             <div className="flex-1 relative bg-muted/20 flex items-center justify-center p-4 min-h-[300px]">
+             <div className="flex-1 relative bg-muted/20 flex items-center justify-center p-2 sm:p-4 min-h-[250px] sm:min-h-[300px]">
                 {/* Mobile Toolbar */}
-                <div className="absolute top-2 right-2 z-20 flex space-x-1">
+                <div className="absolute top-2 right-2 z-20 flex gap-1">
                    {generatedImage && (
-                     <Button variant="secondary" size="icon" className="h-8 w-8 bg-background/80" onClick={() => setGeneratedImage(null)}>
-                       <RefreshCcw className="w-4 h-4" />
+                     <Button variant="secondary" size="icon" className="h-8 w-8 sm:h-9 sm:w-9 bg-background/80" onClick={() => setGeneratedImage(null)}>
+                       <RefreshCcw className="w-3 h-3 sm:w-4 sm:h-4" />
                      </Button>
                    )}
                    {generatedImage && (
                      <Button 
                        variant="outline" 
                        size="icon" 
-                       className="h-8 w-8 bg-background/80"
+                       className="h-8 w-8 sm:h-9 sm:w-9 bg-background/80"
                        onClick={() => setIsShareModalOpen(true)}
                      >
-                       <Share2 className="w-4 h-4" />
+                       <Share2 className="w-3 h-3 sm:w-4 sm:h-4" />
                      </Button>
                    )}
                 </div>
 
                 {isGenerating ? (
-                  <div className="w-full h-96 bg-muted animate-pulse rounded-lg flex items-center justify-center">
-                    <div className="text-center">
-                      <Sparkles className="w-8 h-8 mx-auto mb-2 text-primary animate-spin" />
-                      <p className="text-muted-foreground">Generating your design...</p>
+                  <div className="w-full aspect-square sm:aspect-auto sm:h-96 bg-muted animate-pulse rounded-lg flex items-center justify-center">
+                    <div className="text-center px-4">
+                      <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-2 text-primary animate-spin" />
+                      <p className="text-xs sm:text-sm text-muted-foreground">Generating your design...</p>
                     </div>
                   </div>
                 ) : generationError ? (
-                  <div className="w-full h-96 flex items-center justify-center p-4">
-                    <div className="text-center space-y-3">
-                      <div className="w-12 h-12 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
-                        <span className="text-destructive">⚠️</span>
+                  <div className="w-full aspect-square sm:aspect-auto sm:h-96 flex items-center justify-center p-3 sm:p-4">
+                    <div className="text-center space-y-2 sm:space-y-3">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
+                        <span className="text-destructive text-lg sm:text-xl">⚠️</span>
                       </div>
-                      <p className="text-sm text-destructive font-medium">{generationError}</p>
-                      <Button variant="outline" size="sm" onClick={() => setGenerationError(null)}>
+                      <p className="text-xs sm:text-sm text-destructive font-medium">{generationError}</p>
+                      <Button variant="outline" size="sm" onClick={() => setGenerationError(null)} className="text-xs sm:text-sm h-8 sm:h-9">
                         Try Again
                       </Button>
                     </div>
@@ -364,15 +359,15 @@ export default function DashboardPage() {
                 ) : generatedImage && uploadedImage ? (
                   <div className="relative w-full aspect-square rounded-xl overflow-hidden shadow-xl border border-white/10 group bg-black">
                     <TransformationSlider beforeImage={uploadedImage} afterImage={generatedImage} />
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
-                      <Button size="sm" onClick={() => setIsProductSidebarOpen(true)} className="rounded-full bg-white text-black shadow-lg">
-                        <ShoppingBag className="w-4 h-4 mr-2" /> Detect
+                    <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 z-30">
+                      <Button size="sm" onClick={() => setIsProductSidebarOpen(true)} className="rounded-full bg-white text-black shadow-lg text-xs sm:text-sm h-8 sm:h-9">
+                        <ShoppingBag className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" /> Detect
                       </Button>
                     </div>
                   </div>
                 ) : (
                   <EmptyState
-                    icon={<Upload className="w-8 h-8 text-primary" />}
+                    icon={<Upload className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />}
                     title="Design Your Space"
                     description="Upload a photo of your room to get started with AI-powered design transformations"
                   />
@@ -380,10 +375,10 @@ export default function DashboardPage() {
              </div>
 
              {/* Mobile Controls Drawer */}
-             <div className="border-t bg-card shrink-0 flex flex-col p-4">
+             <div className="border-t bg-card shrink-0 flex flex-col gap-2 p-3 sm:p-4">
                 <Button 
                   size="lg" 
-                  className="w-full h-12 font-bold shadow-lg rounded-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white disabled:opacity-50" 
+                  className="w-full h-11 sm:h-12 font-semibold shadow-md rounded-lg bg-linear-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white disabled:opacity-50 text-sm sm:text-base transition-all hover:shadow-lg" 
                   onClick={handleGenerate} 
                   disabled={isGenerating || !uploadedImage || getRateLimitRemainingTime() !== null}
                 >
@@ -397,14 +392,14 @@ export default function DashboardPage() {
                 </Button>
                 <Collapsible open={isMobileControlsOpen} onOpenChange={setIsMobileControlsOpen}>
                   <CollapsibleTrigger asChild>
-                    <Button variant="ghost" className="w-full h-10 rounded-none border-t flex items-center justify-between px-4">
-                      <span className="text-xs font-bold uppercase tracking-widest">Configuration</span>
-                      {isMobileControlsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                    <Button variant="ghost" className="w-full h-10 rounded-lg flex items-center justify-between px-4 text-xs font-semibold uppercase tracking-wide hover:bg-muted/50">
+                      <span>Configuration</span>
+                      {isMobileControlsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                   </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <ScrollArea className="h-[40vh]">
-                      <Controls />
+                  <CollapsibleContent className="mt-2">
+                    <ScrollArea className="h-[35vh] rounded-lg">
+                      <Controls isMobileCollapsible={true} />
                     </ScrollArea>
                   </CollapsibleContent>
                 </Collapsible>
@@ -413,7 +408,7 @@ export default function DashboardPage() {
         ) : (
           <ResizablePanelGroup direction="horizontal" className="h-full rounded-none border-t">
             <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="bg-card border-r z-10 shadow-lg flex flex-col">
-              <Controls />
+              <Controls isMobileCollapsible={false} />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={75} className="relative bg-muted/20">

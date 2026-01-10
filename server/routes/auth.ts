@@ -9,6 +9,8 @@ import { signupSchema, loginSchema, googleAuthSchema, validateRequest } from '..
 import { setAuthCookie, clearAuthCookie } from '../middleware/authCookie.js';
 import { Errors, asyncHandler } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
+import { emailService } from '../services/email.js';
+import { TokenManager } from '../utils/tokenManager.js';
 
 export const authRoutes = Router();
 
@@ -23,8 +25,9 @@ const oauthStateSchema = z.object({
 authRoutes.post('/signup', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
   const validated = validateRequest(signupSchema, req.body);
   const { email, password, profilePicture } = validated;
+  const rememberMe = req.body.rememberMe === true;
 
-  logger.info('Signup attempt', { email });
+  logger.info('Signup attempt', { email, rememberMe });
 
   const existingUser = await Database.getUserByEmail(email);
   if (existingUser) {
@@ -35,24 +38,43 @@ authRoutes.post('/signup', asyncHandler(async (req: AuthRequest, res: Response):
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await Database.createUser(email, passwordHash, undefined, profilePicture);
 
-  const token = jwt.sign(
-    { userId: user.id, email },
-    getJWTSecret(),
-    { expiresIn: '7d' }
+  // Generate token pair with refresh token
+  const tokenPair = TokenManager.generateTokenPair(user.id, email, rememberMe);
+
+  // Create session in database
+  const deviceInfo = TokenManager.extractDeviceInfo(req.headers['user-agent']);
+  const refreshTokenHash = TokenManager.hashToken(tokenPair.refreshToken);
+  const accessTokenHash = TokenManager.hashToken(tokenPair.accessToken);
+  const expiresAt = TokenManager.getRefreshTokenExpiryDate(rememberMe);
+
+  await Database.createSession(
+    user.id,
+    refreshTokenHash,
+    accessTokenHash,
+    expiresAt,
+    deviceInfo,
+    req.ip,
+    req.headers['user-agent']
   );
 
   const savedUser = await Database.getUserById(user.id);
 
-  logger.logAuth('User signup successful', user.id, { email });
+  logger.logAuth('User signup successful', user.id, { email, rememberMe });
 
-  res.json({ token, user: { id: user.id, email, picture: savedUser?.picture || profilePicture } });
+  res.json({
+    accessToken: tokenPair.accessToken,
+    refreshToken: tokenPair.refreshToken,
+    expiresIn: 15 * 60, // 15 minutes in seconds
+    user: { id: user.id, email, picture: savedUser?.picture || profilePicture }
+  });
 }));
 
 authRoutes.post('/login', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
   const validated = validateRequest(loginSchema, req.body);
   const { email, password } = validated;
+  const rememberMe = req.body.rememberMe === true;
 
-  logger.info('Login attempt', { email });
+  logger.info('Login attempt', { email, rememberMe });
 
   const user = await Database.getUserByEmail(email);
   if (!user) {
@@ -66,15 +88,33 @@ authRoutes.post('/login', asyncHandler(async (req: AuthRequest, res: Response): 
     throw Errors.invalidCredentials();
   }
 
-  const token = jwt.sign(
-    { userId: user.id, email: user.email },
-    getJWTSecret(),
-    { expiresIn: '7d' }
+  // Generate token pair with refresh token
+  const tokenPair = TokenManager.generateTokenPair(user.id, user.email, rememberMe);
+
+  // Create session in database
+  const deviceInfo = TokenManager.extractDeviceInfo(req.headers['user-agent']);
+  const refreshTokenHash = TokenManager.hashToken(tokenPair.refreshToken);
+  const accessTokenHash = TokenManager.hashToken(tokenPair.accessToken);
+  const expiresAt = TokenManager.getRefreshTokenExpiryDate(rememberMe);
+
+  await Database.createSession(
+    user.id,
+    refreshTokenHash,
+    accessTokenHash,
+    expiresAt,
+    deviceInfo,
+    req.ip,
+    req.headers['user-agent']
   );
 
-  logger.logAuth('User login successful', user.id, { email });
+  logger.logAuth('User login successful', user.id, { email, rememberMe });
 
-  res.json({ token, user: { id: user.id, email: user.email, picture: user.picture } });
+  res.json({
+    accessToken: tokenPair.accessToken,
+    refreshToken: tokenPair.refreshToken,
+    expiresIn: 15 * 60, // 15 minutes in seconds
+    user: { id: user.id, email: user.email, picture: user.picture, name: user.name }
+  });
 }));
 
 authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -89,8 +129,12 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
   try {
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
     const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    // HARDCODED: Must match EXACTLY what frontend sends to Google
-    const redirectUri = 'https://spavix-ai.onrender.com/api/auth/google/callback';
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    // Determine redirect URI based on environment
+    const redirectUri = isProduction 
+      ? 'https://spavix-ai.onrender.com/api/auth/google/callback'
+      : 'http://localhost:5000/api/auth/google/callback';
 
     logger.info('Google OAuth callback initiated', {
       redirectUri,
@@ -187,18 +231,31 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
       logger.logAuth('User login via Google OAuth', user.id, { email });
     }
 
-    // Create JWT token
-    const jwtToken = jwt.sign(
-      { userId: user.id, email: user.email },
-      getJWTSecret(),
-      { expiresIn: '7d' }
+    // Generate token pair with refresh token (default 7 days for OAuth)
+    const tokenPair = TokenManager.generateTokenPair(user.id, user.email, false);
+
+    // Create session in database
+    const deviceInfo = TokenManager.extractDeviceInfo(req.headers['user-agent']);
+    const refreshTokenHash = TokenManager.hashToken(tokenPair.refreshToken);
+    const accessTokenHash = TokenManager.hashToken(tokenPair.accessToken);
+    const expiresAt = TokenManager.getRefreshTokenExpiryDate(false);
+
+    await Database.createSession(
+      user.id,
+      refreshTokenHash,
+      accessTokenHash,
+      expiresAt,
+      deviceInfo,
+      req.ip,
+      req.headers['user-agent']
     );
 
-    // Redirect to frontend with token
-    // HARDCODED: Must always redirect to Vercel frontend, never to backend or localhost
-    const frontendUrl = 'https://spavix-ai.vercel.app';
+    // Redirect to frontend with tokens
+    const frontendUrl = isProduction 
+      ? 'https://spavix-ai.vercel.app'
+      : 'http://localhost:5000'; // Vite default port
     
-    const callbackUrl = `${frontendUrl}/auth/callback?token=${jwtToken}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`;
+    const callbackUrl = `${frontendUrl}/auth/callback?accessToken=${tokenPair.accessToken}&refreshToken=${tokenPair.refreshToken}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`;
     logger.info(`Redirecting to frontend callback: ${callbackUrl}`);
     res.redirect(callbackUrl);
   } catch (error) {
@@ -304,8 +361,7 @@ authRoutes.post('/forgot-password', asyncHandler(async (req: AuthRequest, res: R
   const { email } = req.body;
 
   if (!email) {
-    res.status(400).json({ error: 'Email is required' });
-    return;
+    throw Errors.validationError('Email is required');
   }
 
   // Check if user exists
@@ -317,17 +373,26 @@ authRoutes.post('/forgot-password', asyncHandler(async (req: AuthRequest, res: R
     return;
   }
 
-  // Generate reset token (in a real app, this would be stored in DB with expiry)
+  // Generate reset token
   const resetToken = jwt.sign(
     { userId: user.id, email, type: 'password-reset' },
     getJWTSecret(),
     { expiresIn: '1h' }
   );
 
-  // TODO: Send email with reset link
-  // For now, just log the token (in production, this should be sent via email)
-  logger.info('Password reset token generated', { email, userId: user.id });
-  
+  // Store token in database with 1 hour expiry
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  await Database.createPasswordResetToken(user.id, resetToken, expiresAt);
+
+  // Build reset link
+  const frontendUrl = process.env.FRONTEND_URL || 'https://spavix-ai.vercel.app';
+  const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+
+  // Send email
+  const emailSent = await emailService.sendPasswordResetEmail(email, resetLink);
+
+  logger.info('Password reset token generated and email sent', { email, userId: user.id, emailSent });
+
   res.json({ message: 'If an account exists with this email, a password reset link has been sent.' });
 }));
 
@@ -379,6 +444,50 @@ authRoutes.post('/change-password', authMiddleware, asyncHandler(async (req: Aut
     }
     throw Errors.internalError('Unknown error occurred');
   }
+}));
+
+// Reset password route
+authRoutes.post('/reset-password', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    throw Errors.validationError('Token and new password are required');
+  }
+
+  if (newPassword.length < 8) {
+    throw Errors.validationError('Password must be at least 8 characters long');
+  }
+
+  // Verify token exists and is not expired
+  const resetTokenRecord = await Database.getPasswordResetToken(token);
+  if (!resetTokenRecord) {
+    logger.logSecurity('Reset password: Invalid or expired token', 'medium', { token: token.substring(0, 20) });
+    throw Errors.unauthorized('Invalid or expired reset token');
+  }
+
+  // Verify JWT token signature
+  try {
+    jwt.verify(token, getJWTSecret());
+  } catch (error) {
+    logger.logSecurity('Reset password: Invalid token signature', 'medium', { error: error instanceof Error ? error.message : String(error) });
+    throw Errors.unauthorized('Invalid reset token');
+  }
+
+  // Hash new password
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  // Update user password
+  const updated = await Database.updateUserPassword(resetTokenRecord.user_id, passwordHash);
+  if (!updated) {
+    throw Errors.internalError('Failed to update password');
+  }
+
+  // Delete the used token
+  await Database.deletePasswordResetToken(token);
+
+  logger.logAuth('Password reset successfully', resetTokenRecord.user_id);
+
+  res.json({ message: 'Password has been reset successfully. You can now login with your new password.' });
 }));
 
 authRoutes.post('/logout', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {

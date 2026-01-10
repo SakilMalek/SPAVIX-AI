@@ -49,19 +49,19 @@ export function ProductSidebar({ isOpen, onClose }: ProductSidebarProps) {
   return (
     <div
       className={cn(
-        "fixed inset-y-0 right-0 z-[60] w-full sm:w-[400px] bg-background border-l shadow-2xl transform transition-transform duration-300 ease-in-out",
+        "fixed inset-y-0 right-0 z-[60] w-full xs:w-80 sm:w-96 md:w-[400px] bg-background border-l shadow-2xl transform transition-transform duration-300 ease-in-out",
         isOpen ? "translate-x-0" : "translate-x-full"
       )}
     >
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <div>
-            <h2 className="text-xl font-heading font-bold">Detected Products</h2>
-            <p className="text-sm text-muted-foreground">{MOCK_PRODUCTS.length} items found in this look</p>
+        <div className="flex items-center justify-between gap-2 p-4 sm:p-6 border-b">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg sm:text-xl font-heading font-bold truncate">Detected Products</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground">{MOCK_PRODUCTS.length} items found</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
-            <X className="w-5 h-5" />
+          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full shrink-0 h-9 w-9 sm:h-10 sm:w-10">
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
         </div>
 

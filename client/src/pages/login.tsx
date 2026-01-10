@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
+import { Loader2 } from "lucide-react";
 
 declare global {
   interface Window {
@@ -17,6 +18,7 @@ export default function LoginPage() {
   const { refreshAuth } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
@@ -29,8 +31,11 @@ export default function LoginPage() {
     
     // Redirect to Google OAuth endpoint
     const clientId = "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
-    // HARDCODED: OAuth callback MUST go to Render backend, not Vercel frontend
-    const redirectUri = 'https://spavix-ai.onrender.com/api/auth/google/callback';
+    // Determine redirect URI based on environment
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const redirectUri = isLocalhost 
+      ? 'http://localhost:5000/api/auth/google/callback'
+      : 'https://spavix-ai.onrender.com/api/auth/google/callback';
     const scope = "openid email profile";
     const responseType = "code";
     
@@ -72,17 +77,21 @@ export default function LoginPage() {
       const response = await fetch(getApiUrl("/api/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
 
       if (!response.ok) {
         const error = await response.json();
+        console.error('Login failed:', error);
         toast.error(error.error || "Login failed");
+        setIsLoading(false);
         return;
       }
 
       const data = await response.json();
-      localStorage.setItem("token", data.token);
+      // Store both access and refresh tokens
+      localStorage.setItem("token", data.accessToken);
+      localStorage.setItem("refreshToken", data.refreshToken);
       if (data.user?.picture) {
         localStorage.setItem("userProfilePicture", data.user.picture);
       }
@@ -91,7 +100,11 @@ export default function LoginPage() {
       }
       toast.success("Logged in successfully!");
       await refreshAuth();
-      setLocation("/dashboard");
+      
+      // Redirect to intended destination or dashboard
+      const redirect = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
+      sessionStorage.removeItem('redirectAfterLogin');
+      setLocation(redirect);
     } catch (error: any) {
       toast.error(error.message || "Login failed");
     } finally {
@@ -153,20 +166,28 @@ export default function LoginPage() {
               )}
             </div>
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" className="rounded" />
-                Remember me
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="rounded" 
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>Remember me for 30 days</span>
               </label>
               <a href="/forgot-password" className="text-sm text-purple-600 hover:text-purple-700">
                 Forgot password?
               </a>
             </div>
-            <Button
-              type="submit"
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-              disabled={isLoading}
-            >
-              {isLoading ? "Signing in..." : "Sign In"}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign in'
+              )}
             </Button>
           </form>
 

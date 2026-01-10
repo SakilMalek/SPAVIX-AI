@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { AVATARS } from "@/config/avatars";
+import { Loader2 } from "lucide-react";
 
 declare global {
   interface Window {
@@ -30,8 +31,11 @@ export default function SignupPage() {
     
     // Redirect to Google OAuth endpoint
     const clientId = "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
-    // HARDCODED: OAuth callback MUST go to Render backend, not Vercel frontend
-    const redirectUri = 'https://spavix-ai.onrender.com/api/auth/google/callback';
+    // Determine redirect URI based on environment
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const redirectUri = isLocalhost 
+      ? 'http://localhost:5000/api/auth/google/callback'
+      : 'https://spavix-ai.onrender.com/api/auth/google/callback';
     const scope = "openid email profile";
     const responseType = "code";
     
@@ -214,10 +218,17 @@ export default function SignupPage() {
 
             <Button
               type="submit"
-              className="w-full bg-linear-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 mt-6"
+              className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? "Creating Account..." : "Create Account"}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating account...
+                </>
+              ) : (
+                'Create account'
+              )}
             </Button>
           </form>
 

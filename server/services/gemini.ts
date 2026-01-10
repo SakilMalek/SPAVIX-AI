@@ -330,31 +330,66 @@ export class GeminiImageService {
       ? materialDescriptions.join(', ') 
       : 'modern finishes';
 
-    return `IMPORTANT: Keep the exact same room layout, structure, and furniture placement. Only update the colors, materials, and lighting.
+    return `SYSTEM/ROLE: You are an expert photorealistic room restyler. Your job is ONLY to change finishes, colors, textures, and lighting — NOTHING else. Treat these rules as absolute, highest-priority constraints.
 
-Redesign this ${roomType} in ${style} style with these changes:
+REFERENCE: Use the provided input image as the only visual source. Preserve the camera position, focal length, perspective, image framing, and scale.
 
-PRESERVE:
-- Keep the exact same room layout and dimensions
-- Keep all existing furniture in the same positions
-- Keep doors, windows, and walls in the same locations
-- Maintain the overall spatial arrangement
+HARD CONSTRAINTS — DO NOT VIOLATE:
+- Do not move, add, remove, or resize any objects (furniture, rugs, plants, appliances, boxes, tools, etc.).
+- Do not move or change doors, windows, window slats, frame shapes, or wall locations. Do not change ceiling height, wall placement, or architectural elements.
+- Do not change camera angle, perspective, horizon, vanishing points, or crop/zoom.
+- Do not add new walls, openings, windows, or structural elements. No new rooms or doorways.
+- Do not insert people, pets, or text/logos.
+- Maintain original hard contact shadows and occlusions; if lighting changes, update shadows conservatively and consistently — do not invent new geometry shadows that imply moved objects.
 
-CHANGE ONLY:
-- Wall colors: ${materials.wallColor || 'neutral tones'}
-${materials.accentWall && materials.accentWall !== 'none' ? `- Add ${materials.accentWall} accent wall` : ''}
-- Floor material: ${materials.floorType || 'hardwood'} flooring
-${materials.curtainType && materials.curtainType !== 'none' ? `- Window treatments: ${materials.curtainType} curtains` : ''}
-- Lighting: ${lightingDesc}
-- Update furniture colors and finishes to match ${style} aesthetic
-- Add decorative elements (plants, artwork) that fit the style
+ALLOWED CHANGES — STRICTLY LIMITED:
+- Repaint walls (color, texture, finishes).
+- REPAIR DAMAGED AREAS: Fix any visible damage in the room including holes in walls, broken wall sections, cracks, water damage, peeling paint, stains, or deteriorated surfaces. Repair these areas to look clean, intact, and professionally finished while maintaining the room's architectural integrity.
+- Replace floor finish (tile, wood, carpet) visually only — keep exact floor geometry and seams.
+- Change window treatments (curtains/blinds) appearance, but keep them in the same location and shape.
+- Adjust furniture surface colors and upholstery texture only (no reshaping, no adding/removing legs/frames).
+- Adjust lighting mood (warmer/colder, brightness), but preserve apparent light source directions unless user explicitly requests new fixtures.
+- Add decorative elements that enhance the room: potted plants, decorative lights (string lights, wall sconces, table lamps), wall art (paintings, prints, photographs), sculptures, mirrors, throw pillows, rugs, and other small decor items. These must be placed naturally on existing surfaces (shelves, tables, walls, corners) without moving or obscuring existing furniture. Any added decor must not overlap or obstruct existing objects and must be appropriate to the ${style} style.
+
+MASK / INPAINTING INSTRUCTIONS:
+- If an edit mask is provided, restrict edits strictly to masked regions (walls, floor, curtains, upholstery). Outside the mask: zero changes.
+- If no mask: only edit pixels that belong to continuous planar surfaces (walls, floors, curtains, cushions). Avoid changing textured clutter or small objects.
+
+OUTPUT DETAILS:
+- Photorealistic image, same resolution and aspect ratio as input.
+- Keep camera framing identical; no cropping, no added peripheral space.
+- Maintain original perspective, scale, and furniture placement.
 
 STYLE GUIDELINES:
-- Apply ${style} design principles to existing furniture
-- Maintain the same furniture count and positions
-- Update colors and textures only
-- Keep the room functional and recognizable
+- Redesign in a ${style} style while strictly following allowed changes.
+- Use natural, plausible materials and realistic reflections appropriate to the lighting.
+- Colors: ${materials.wallColor || 'neutral tones'}, Accent wall: ${materials.accentWall || 'none'}, Floor: ${materials.floorType || 'same geometry, new finish'}, Curtains: ${materials.curtainType || 'no change unless specified'}, Lighting: ${lightingDesc}.
 
-OUTPUT: Photorealistic image showing the same ${roomType} with updated colors, materials, and lighting. The layout and furniture placement must remain identical. 8K resolution.`;
+DECORATIVE ELEMENTS TO ADD (${style} style):
+- Potted plants and greenery: Place indoor plants (monstera, fiddle leaf fig, snake plants, pothos, peace lilies) on shelves, corners, tables, or floor in ways that complement the ${style} aesthetic.
+- Wall art and paintings: Add framed artwork, paintings, prints, or photographs on empty wall spaces that match the ${style} style and color scheme.
+- Decorative lighting: Include table lamps, floor lamps, wall sconces, string lights, or pendant lights that enhance the ${style} ambiance and complement the ${lightingDesc} mood.
+- Decorative accessories: Add throw pillows, decorative rugs, blankets, vases, sculptures, mirrors, candles, books, or other small decor items on tables, shelves, and seating areas.
+- Mirrors: Place decorative mirrors on walls to enhance light and create visual interest while maintaining the ${style} aesthetic.
+- Textiles: Add throw blankets, cushions, and rugs in colors and patterns that complement the ${style} and the ${materials.wallColor || 'neutral'} walls.
+All decorative additions must be placed on existing surfaces without moving furniture, must not obstruct existing objects, and must be photorealistic and appropriate to the ${style} design style.
+
+NEGATIVE PROMPT (things to avoid):
+- Do not change room layout, structure, architecture, doors, windows, or perspective.
+- Do not move, remove, or add furniture pieces (only change their colors/finishes).
+- Do not add walls, archways, or open-plan changes.
+- Do not add people, animals, watermarks, captions, or logos.
+- Do not create cartoonish, surreal, or stylized geometry changes.
+- Decorative items must not overlap or hide existing furniture or architectural elements.
+- Do not add decorative elements that are inappropriate for the ${style} style.
+- DO NOT leave any visible damage, holes, cracks, or deteriorated areas in the final image. All damage must be repaired and the room must look clean and well-maintained.
+
+STRICT INSTRUCTION: Treat "HARD CONSTRAINTS" as non-negotiable. If a requested style would require structural changes, instead create an equivalent look through colors, finishes, and decor only.
+
+IMPORTANT: Use the input image as the sole reference. PRESERVE the exact room geometry, camera angle, framing, and all object placements. DO NOT move, add, remove, resize, or reshape any furniture, doors, windows, or architectural elements.
+
+Only edit allowed elements: wall paint/texture, floor finish (visual only, keep seams and layout), window treatments, furniture surface colors/finishes, lighting (brightness & color), and small decor that does not require moving objects. Maintain original shadows/occlusions; do not invent new geometry.
+
+OUTPUT: Single photorealistic image; same resolution & aspect ratio; identical perspective; no added structures or objects.`;
   }
 }

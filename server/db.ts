@@ -126,6 +126,90 @@ export class Database {
     );
   }
 
+  // ============================================
+  // SESSION MANAGEMENT (Phase 2)
+  // ============================================
+
+  static async createSession(
+    userId: string,
+    refreshTokenHash: string,
+    accessTokenHash: string,
+    expiresAt: Date,
+    deviceInfo?: any,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<{ id: string }> {
+    const result = await this.query(
+      `INSERT INTO sessions (user_id, refresh_token_hash, access_token_hash, device_info, ip_address, user_agent, expires_at, created_at, last_activity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+       RETURNING id`,
+      [userId, refreshTokenHash, accessTokenHash, deviceInfo ? JSON.stringify(deviceInfo) : null, ipAddress, userAgent, expiresAt]
+    );
+    return result.rows[0];
+  }
+
+  static async getSessionByRefreshToken(refreshTokenHash: string): Promise<{
+    id: string;
+    user_id: string;
+    refresh_token_hash: string;
+    access_token_hash: string;
+    expires_at: Date;
+    is_active: boolean;
+  } | null> {
+    const result = await this.query(
+      `SELECT id, user_id, refresh_token_hash, access_token_hash, expires_at, is_active
+       FROM sessions
+       WHERE refresh_token_hash = $1 AND is_active = true AND expires_at > NOW()`,
+      [refreshTokenHash]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async updateSessionAccessToken(sessionId: string, accessTokenHash: string): Promise<void> {
+    await this.query(
+      `UPDATE sessions
+       SET access_token_hash = $2, last_activity = NOW()
+       WHERE id = $1`,
+      [sessionId, accessTokenHash]
+    );
+  }
+
+  static async revokeSession(sessionId: string): Promise<void> {
+    await this.query(
+      `UPDATE sessions
+       SET is_active = false
+       WHERE id = $1`,
+      [sessionId]
+    );
+  }
+
+  static async revokeAllUserSessions(userId: string): Promise<void> {
+    await this.query(
+      `UPDATE sessions
+       SET is_active = false
+       WHERE user_id = $1`,
+      [userId]
+    );
+  }
+
+  static async getUserActiveSessions(userId: string): Promise<any[]> {
+    const result = await this.query(
+      `SELECT id, device_info, ip_address, user_agent, created_at, last_activity
+       FROM sessions
+       WHERE user_id = $1 AND is_active = true AND expires_at > NOW()
+       ORDER BY last_activity DESC`,
+      [userId]
+    );
+    return result.rows;
+  }
+
+  static async cleanupExpiredSessions(): Promise<number> {
+    const result = await this.query(
+      `DELETE FROM sessions WHERE expires_at < NOW() RETURNING id`
+    );
+    return result.rowCount || 0;
+  }
+
   static async recordUserConsent(
     userId: string,
     privacyConsent: boolean,
@@ -422,6 +506,18 @@ export class Database {
       CREATE INDEX IF NOT EXISTS idx_transformation_history_generation_id ON transformation_history(generation_id);
       CREATE INDEX IF NOT EXISTS idx_transformation_history_user_id ON transformation_history(user_id);
       CREATE INDEX IF NOT EXISTS idx_transformation_history_created_at ON transformation_history(created_at);
+
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token VARCHAR(500) NOT NULL UNIQUE,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
+      CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token);
+      CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at);
     `);
   }
 
@@ -711,5 +807,38 @@ export class Database {
       [passwordHash, userId]
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  static async createPasswordResetToken(userId: string, token: string, expiresAt: Date): Promise<{ id: string }> {
+    const result = await this.query(
+      `INSERT INTO password_reset_tokens (user_id, token, expires_at, created_at)
+       VALUES ($1, $2, $3, NOW())
+       RETURNING id`,
+      [userId, token, expiresAt]
+    );
+    return result.rows[0];
+  }
+
+  static async getPasswordResetToken(token: string): Promise<{ id: string; user_id: string; expires_at: string } | null> {
+    const result = await this.query(
+      `SELECT id, user_id, expires_at FROM password_reset_tokens 
+       WHERE token = $1 AND expires_at > NOW()`,
+      [token]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async deletePasswordResetToken(token: string): Promise<boolean> {
+    const result = await this.query(
+      `DELETE FROM password_reset_tokens WHERE token = $1`,
+      [token]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  static async deleteExpiredPasswordResetTokens(): Promise<void> {
+    await this.query(
+      `DELETE FROM password_reset_tokens WHERE expires_at < NOW()`
+    );
   }
 }

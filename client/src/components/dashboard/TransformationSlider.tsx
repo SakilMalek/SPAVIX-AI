@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { MoveHorizontal, Loader } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,10 @@ export function TransformationSlider({ beforeImage, afterImage, generationId, cl
   const [loadedAfterImage, setLoadedAfterImage] = useState<string>("");
   const [isLoadingImages, setIsLoadingImages] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const sliderHandleRef = useRef<HTMLDivElement>(null);
+  const clipPathRef = useRef<HTMLDivElement>(null);
+  const positionRef = useRef(50);
+  const rafRef = useRef<number | null>(null);
 
   // Lazy load images if not provided
   useEffect(() => {
@@ -80,20 +84,39 @@ export function TransformationSlider({ beforeImage, afterImage, generationId, cl
     loadImages();
   }, [beforeImage, afterImage, generationId]);
 
-  const handleMove = (event: React.MouseEvent | React.TouchEvent) => {
+  const updatePosition = useCallback((clientX: number) => {
     if (!containerRef.current) return;
 
     const containerRect = containerRef.current.getBoundingClientRect();
-    const clientX = 'touches' in event ? event.touches[0].clientX : (event as React.MouseEvent).clientX;
-    
     let position = ((clientX - containerRect.left) / containerRect.width) * 100;
     position = Math.max(0, Math.min(100, position));
     
+    positionRef.current = position;
+    
+    // Update DOM directly for instant visual feedback
+    if (sliderHandleRef.current) {
+      sliderHandleRef.current.style.left = `${position}%`;
+    }
+    if (clipPathRef.current) {
+      clipPathRef.current.style.clipPath = `inset(0 ${100 - position}% 0 0)`;
+    }
+    
+    // Update state for accessibility and final sync
     setSliderPosition(position);
-  };
+  }, []);
 
-  const handleMouseDown = () => setIsDragging(true);
-  const handleMouseUp = () => setIsDragging(false);
+  const handleMove = useCallback((event: React.MouseEvent | React.TouchEvent) => {
+    const clientX = 'touches' in event ? event.touches[0].clientX : (event as React.MouseEvent).clientX;
+    updatePosition(clientX);
+  }, [updatePosition]);
+
+  const handleMouseDown = useCallback(() => {
+    setIsDragging(true);
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const step = 5;
@@ -114,27 +137,34 @@ export function TransformationSlider({ beforeImage, afterImage, generationId, cl
 
   useEffect(() => {
     if (isDragging) {
+      const handleWindowMouseMove = (e: MouseEvent) => {
+        updatePosition(e.clientX);
+      };
+      const handleWindowTouchMove = (e: TouchEvent) => {
+        updatePosition(e.touches[0].clientX);
+      };
+
+      window.addEventListener('mousemove', handleWindowMouseMove, { passive: true });
+      window.addEventListener('touchmove', handleWindowTouchMove, { passive: true });
       window.addEventListener('mouseup', handleMouseUp);
       window.addEventListener('touchend', handleMouseUp);
-    } else {
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchend', handleMouseUp);
-    }
 
-    return () => {
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchend', handleMouseUp);
-    };
-  }, [isDragging]);
+      return () => {
+        window.removeEventListener('mousemove', handleWindowMouseMove);
+        window.removeEventListener('touchmove', handleWindowTouchMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+        window.removeEventListener('touchend', handleMouseUp);
+      };
+    }
+  }, [isDragging, updatePosition, handleMouseUp]);
 
   return (
     <div 
       ref={containerRef}
       className={cn("relative w-full h-full overflow-hidden select-none cursor-ew-resize group bg-muted", className)}
-      onMouseMove={(e) => isDragging && handleMove(e)}
-      onTouchMove={(e) => isDragging && handleMove(e)}
-      onMouseDown={handleMove}
-      onTouchStart={handleMove}
+      style={{ touchAction: 'none' }}
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleMouseDown}
       onKeyDown={handleKeyDown}
       role="slider"
       aria-label="Before and after comparison slider"
@@ -161,8 +191,12 @@ export function TransformationSlider({ beforeImage, afterImage, generationId, cl
 
           {/* Before Image (Foreground - Clip Path) */}
           <div 
+            ref={clipPathRef}
             className="absolute inset-0 w-full h-full overflow-hidden"
-            style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+            style={{ 
+              clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`,
+              willChange: 'clip-path'
+            }}
           >
             <img 
               src={loadedBeforeImage} 
@@ -186,13 +220,19 @@ export function TransformationSlider({ beforeImage, afterImage, generationId, cl
 
           {/* Slider Handle */}
           <div 
-            className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)] transition-all hover:w-2 hover:shadow-[0_0_20px_rgba(255,255,255,0.8)]"
-            style={{ left: `${sliderPosition}%` }}
+            ref={sliderHandleRef}
+            className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)] hover:w-2 hover:shadow-[0_0_20px_rgba(255,255,255,0.8)]"
+            style={{ 
+              left: `${sliderPosition}%`,
+              willChange: 'left',
+              transform: 'translateZ(0)',
+              backfaceVisibility: 'hidden'
+            }}
             onMouseDown={handleMouseDown}
             onTouchStart={handleMouseDown}
             aria-hidden="true"
           >
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-xl transform transition-all hover:scale-125 active:scale-95 hover:shadow-2xl">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-xl hover:scale-125 active:scale-95 hover:shadow-2xl">
               <MoveHorizontal className="w-5 h-5 text-black" />
             </div>
           </div>

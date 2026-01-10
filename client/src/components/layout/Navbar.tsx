@@ -35,19 +35,19 @@ export function Navbar() {
         Skip to main content
       </a>
       <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md supports-backdrop-filter:bg-background/60">
-        <div className="container flex h-16 items-center px-4 mx-auto">
+        <div className="w-full flex h-14 sm:h-16 items-center px-3 sm:px-4 md:px-6 mx-auto max-w-full">
         <Link href="/">
-          <div className="mr-8 flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity">
+          <div className="mr-4 sm:mr-8 flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity shrink-0">
             <img 
               src={logoSrc} 
               alt="SPAVIX Logo" 
-              className="h-12 w-auto"
+              className="h-10 sm:h-12 w-auto"
             />
           </div>
         </Link>
         
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
+        <nav className="hidden md:flex items-center space-x-4 lg:space-x-6 text-xs lg:text-sm font-medium">
           <Link href="/dashboard">
             <span className={`transition-colors hover:text-foreground/80 cursor-pointer flex items-center gap-1.5 ${location === '/dashboard' ? 'text-foreground font-semibold' : 'text-foreground/60'}`}>
               <LayoutGrid className="w-4 h-4" />

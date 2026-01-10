@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import 'dotenv/config';
 import { authRoutes } from "./routes/auth.js";
+import tokenRoutes from "./routes/token.js";
 import { generationRoutes } from "./routes/generation.js";
 import { uploadRoutes } from "./routes/upload.js";
 import productsRoutes from "./routes/products.js";
@@ -21,6 +22,7 @@ export async function registerRoutes(
 
   // Register auth routes
   app.use("/api/auth", authRoutes);
+  app.use("/api/token", tokenRoutes);
 
   // Register other routes
   app.use("/api/generations", generationRoutes);

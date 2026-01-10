@@ -69,6 +69,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Stricter rate limiting for authentication endpoints (must be BEFORE general /api limit)
 const isProduction = process.env.NODE_ENV === 'production';
+console.log(`[RateLimit] Environment: NODE_ENV=${process.env.NODE_ENV}, isProduction=${isProduction}`);
 
 app.use(
   "/api/auth/login",
@@ -91,36 +92,44 @@ app.use(
 );
 
 // Rate limiting middleware - general API rate limit (applied after specific routes)
-app.use(
-  "/api",
-  rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // 100 requests per 15 minutes per user/IP
-    keyGenerator: (req) => (req as any).user?.id || req.ip || "unknown",
-    message: "Too many requests from this IP, please try again later.",
-  })
-);
+// Disabled in development mode
+if (isProduction) {
+  app.use(
+    "/api",
+    rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // 100 requests per 15 minutes per user/IP
+      keyGenerator: (req) => (req as any).user?.id || req.ip || "unknown",
+      message: "Too many requests from this IP, please try again later.",
+    })
+  );
+}
 
 // Rate limiting for expensive operations (POST/PUT/DELETE only)
 // GET requests for viewing history should not be rate limited
-app.use(
-  "/api/generations",
-  (req, res, next) => {
-    // Only apply strict rate limiting to POST (create), PUT, DELETE operations
-    // GET requests are allowed freely
-    if (req.method === "GET") {
-      return next();
+// Disabled in development mode, enabled in production
+if (isProduction) {
+  app.use(
+    "/api/generations",
+    (req, res, next) => {
+      // Only apply strict rate limiting to POST (create), PUT, DELETE operations
+      // GET requests are allowed freely
+      if (req.method === "GET") {
+        return next();
+      }
+      
+      // Apply rate limiting to POST/PUT/DELETE in production only
+      rateLimit({
+        windowMs: 60 * 60 * 1000, // 1 hour
+        max: 10, // 10 creations per hour per user
+        keyGenerator: (req) => (req as any).user?.id || req.ip || "unknown",
+        message: "Generation limit exceeded, please try again later.",
+      })(req, res, next);
     }
-    
-    // Apply rate limiting to POST/PUT/DELETE
-    rateLimit({
-      windowMs: 60 * 60 * 1000, // 1 hour
-      max: 10, // 10 creations per hour per user
-      keyGenerator: (req) => (req as any).user?.id || req.ip || "unknown",
-      message: "Generation limit exceeded, please try again later.",
-    })(req, res, next);
-  }
-);
+  );
+} else {
+  console.log('[RateLimit] Generation rate limiting DISABLED in development mode');
+}
 
 app.use(
   session({

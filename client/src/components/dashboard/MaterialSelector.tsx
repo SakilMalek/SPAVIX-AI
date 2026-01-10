@@ -13,18 +13,18 @@ export function MaterialSelector({ type, value, onChange, label }: MaterialSelec
   const options = type === "wall" ? WALL_COLORS : FLOOR_TYPES;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 w-full">
        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
         {label}
       </label>
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2 sm:gap-3">
         {options.map((option) => (
           <Tooltip key={option.id}>
             <TooltipTrigger asChild>
               <button
                 onClick={() => onChange(option.id)}
                 className={cn(
-                  "relative h-10 w-10 rounded-full border-2 transition-all focus:outline-none",
+                  "relative h-12 w-12 sm:h-10 sm:w-10 rounded-full border-2 transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary",
                   value === option.id 
                     ? "border-primary ring-1 ring-primary ring-offset-1 scale-105" 
                     : "border-transparent hover:scale-105"

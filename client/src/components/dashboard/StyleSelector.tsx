@@ -17,16 +17,16 @@ export function StyleSelector({ value, onChange }: StyleSelectorProps) {
   const hasMore = STYLES.length > INITIAL_DISPLAY;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="space-y-3 w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
           Interior Style
         </label>
         <span className="text-xs text-muted-foreground">{STYLES.length} styles available</span>
       </div>
       
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-3 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full">
           {displayedStyles.map((style) => (
             <button
               key={style.id}

@@ -38,7 +38,17 @@ generationRoutes.post('/', authMiddleware, async (req: AuthRequest, res: Respons
       return;
     }
 
-    console.log('Generating image with prompt for:', { roomType, style });
+    // Validate projectId if provided
+    if (projectId) {
+      const project = await Database.getProjectById(projectId, req.user.id);
+      if (!project) {
+        res.status(404).json({ error: 'Project not found or does not belong to user' });
+        return;
+      }
+      console.log('Generating image for project:', projectId);
+    }
+
+    console.log('Generating image with prompt for:', { roomType, style, projectId });
 
     const prompt = GeminiImageService.buildPrompt(roomType, style, materials);
     console.log('Generated prompt length:', prompt.length);
@@ -78,14 +88,16 @@ generationRoutes.post('/', authMiddleware, async (req: AuthRequest, res: Respons
       'completed'
     );
 
-    logger.info('Generation created with history', { generationId: generation.id, userId: req.user.id });
+    logger.info('Generation created with history', { generationId: generation.id, userId: req.user.id, projectId });
 
     res.json({
       success: true,
+      id: generation.id,
       generationId: generation.id,
       beforeImage: imageUrl,
       afterImage: afterImageUrl,
       version: 1,
+      projectId: projectId || null,
     });
   } catch (error: any) {
     console.error('Generation error:', error.message || error);
@@ -407,7 +419,7 @@ generationRoutes.post('/:id/history', authMiddleware, asyncHandler(async (req: A
     imageBuffer = await GeminiImageService.generateImage(prompt, imageUrl);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error('Gemini generation failed', { error: errorMessage, generationId: req.params.id });
+    logger.error('Gemini generation failed', new Error(errorMessage), { generationId: req.params.id });
     throw Errors.internalError(`Image generation failed: ${errorMessage}`);
   }
 
@@ -441,82 +453,74 @@ generationRoutes.post('/:id/history', authMiddleware, asyncHandler(async (req: A
 }));
 
 // UPDATE generation project association
-generationRoutes.put('/:id/project', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    const { projectId } = req.body as { projectId: string | null };
-
-    // Verify generation exists and belongs to user
-    const generation = await Database.getGenerationById(req.params.id, req.user.id);
-    if (!generation) {
-      res.status(404).json({ error: 'Generation not found' });
-      return;
-    }
-
-    // Verify project exists and belongs to user (if projectId provided)
-    if (projectId) {
-      const project = await Database.getProjectById(projectId, req.user.id);
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-    }
-
-    // Update generation project association
-    const oldProjectId = generation.project_id;
-    const updated = await Database.updateGenerationProject(req.params.id, req.user.id, projectId || null);
-
-    // Log the assignment change
-    logger.info('Transformation project assignment changed', {
-      generationId: req.params.id,
-      oldProjectId: oldProjectId,
-      newProjectId: projectId || null,
-      userId: req.user.id
-    });
-
-    res.json({ success: true, generation: updated });
-  } catch (error) {
-    console.error('Update generation project error:', error);
-    res.status(500).json({ error: 'Failed to update generation project' });
+generationRoutes.put('/:id/project', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw Errors.unauthorized();
   }
-});
+
+  const { projectId } = req.body as { projectId: string | null };
+
+  // Verify generation exists and belongs to user
+  const generation = await Database.getGenerationById(req.params.id, req.user.id);
+  if (!generation) {
+    throw Errors.notFound('Generation');
+  }
+
+  // Verify project exists and belongs to user (if projectId provided)
+  if (projectId) {
+    const project = await Database.getProjectById(projectId, req.user.id);
+    if (!project) {
+      throw Errors.notFound('Project');
+    }
+  }
+
+  // Update generation project association
+  const oldProjectId = generation.project_id;
+  const updated = await Database.updateGenerationProject(req.params.id, req.user.id, projectId || null);
+
+  if (!updated) {
+    throw Errors.internalError('Failed to update generation project');
+  }
+
+  // Log the assignment change
+  logger.info('Transformation project assignment changed', {
+    generationId: req.params.id,
+    oldProjectId: oldProjectId,
+    newProjectId: projectId || null,
+    userId: req.user.id
+  });
+
+  res.json({ success: true, generation: updated });
+}));
 
 // UNLINK generation from project
-generationRoutes.delete('/:id/project', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    if (!req.user) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    // Verify generation exists and belongs to user
-    const generation = await Database.getGenerationById(req.params.id, req.user.id);
-    if (!generation) {
-      res.status(404).json({ error: 'Generation not found' });
-      return;
-    }
-
-    if (!generation.project_id) {
-      res.status(400).json({ error: 'Generation is not linked to any project' });
-      return;
-    }
-
-    // Unlink from project
-    const updated = await Database.updateGenerationProject(req.params.id, req.user.id, null);
-
-    logger.info('Transformation unlinked from project', {
-      generationId: req.params.id,
-      projectId: generation.project_id,
-      userId: req.user.id
-    });
-
-    res.json({ success: true, generation: updated });
-  } catch (error) {
-    console.error('Unlink generation project error:', error);
-    res.status(500).json({ error: 'Failed to unlink generation from project' });
+generationRoutes.delete('/:id/project', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw Errors.unauthorized();
   }
-});
+
+  // Verify generation exists and belongs to user
+  const generation = await Database.getGenerationById(req.params.id, req.user.id);
+  if (!generation) {
+    throw Errors.notFound('Generation');
+  }
+
+  if (!generation.project_id) {
+    throw Errors.validationError('Generation is not linked to any project');
+  }
+
+  // Unlink from project
+  const updated = await Database.updateGenerationProject(req.params.id, req.user.id, null);
+
+  if (!updated) {
+    throw Errors.internalError('Failed to unlink generation from project');
+  }
+
+  logger.info('Transformation unlinked from project', {
+    generationId: req.params.id,
+    projectId: generation.project_id,
+    userId: req.user.id
+  });
+
+  res.json({ success: true, generation: updated });
+}));

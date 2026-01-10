@@ -89,17 +89,15 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
   try {
     const googleClientId = process.env.GOOGLE_CLIENT_ID;
     const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    // IMPORTANT: Must match exactly what frontend sends to Google
-    // Production default must be the same as frontend's default
-    const apiUrl = process.env.API_URL || 'https://spavix-ai.onrender.com';
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${apiUrl}/api/auth/google/callback`;
+    // HARDCODED: Must match EXACTLY what frontend sends to Google
+    const redirectUri = 'https://spavix-ai.onrender.com/api/auth/google/callback';
 
     logger.info('Google OAuth callback initiated', {
       redirectUri,
       hasClientId: !!googleClientId,
       hasClientSecret: !!googleClientSecret,
-      frontendUrl: process.env.FRONTEND_URL,
-      apiUrl
+      code: code ? `${String(code).substring(0, 20)}...` : 'missing',
+      state: state ? `${String(state).substring(0, 20)}...` : 'missing'
     });
 
     if (!googleClientId || !googleClientSecret) {
@@ -109,22 +107,35 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     }
 
     // Exchange authorization code for access token
+    const tokenBody = new URLSearchParams({
+      code: code as string,
+      client_id: googleClientId,
+      client_secret: googleClientSecret,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+    }).toString();
+
+    logger.info('Sending token exchange request to Google', {
+      redirectUri,
+      clientIdLength: googleClientId?.length,
+      clientSecretLength: googleClientSecret?.length,
+      codeLength: String(code).length
+    });
+
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code: code as string,
-        client_id: googleClientId,
-        client_secret: googleClientSecret,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }).toString(),
+      body: tokenBody,
     });
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       logger.error(`Google OAuth: Token exchange failed - Status ${tokenResponse.status}: ${errorText}`);
-      logger.info('OAuth debug info', { redirectUri, hasClientId: !!googleClientId, hasClientSecret: !!googleClientSecret });
+      logger.info('Token exchange debug', {
+        redirectUri,
+        clientIdSet: !!googleClientId,
+        clientSecretSet: !!googleClientSecret
+      });
       res.status(400).json({ error: 'Failed to exchange authorization code', details: errorText });
       return;
     }

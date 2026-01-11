@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,6 +15,17 @@ import {
   SheetHeader,
   SheetTitle
 } from "@/components/ui/sheet";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Moon, Sun, LogOut, User, History, Sparkles, FolderKanban, Menu, LayoutGrid, Image as ImageIcon, Tag } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/hooks/use-auth";
@@ -150,11 +162,11 @@ function MobileNavLink({ href, children, isActive }: { href: string; children: R
 
 function UserMenu() {
   const { user, logout } = useAuth();
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   
   const handleLogout = () => {
-    if (confirm("Are you sure you want to log out?")) {
-      logout();
-    }
+    logout();
+    setShowLogoutDialog(false);
   };
 
   const getAvatarUrl = () => {
@@ -168,59 +180,103 @@ function UserMenu() {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
-          <Avatar className="h-9 w-9 border border-border overflow-hidden">
-            <img
-              src={getAvatarUrl()}
-              alt="User avatar"
-              className="w-full h-full object-cover"
-            />
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <div className="px-2 py-1.5 text-sm font-medium">{user?.username}</div>
-        <Link href="/profile">
-          <DropdownMenuItem className="cursor-pointer">
-            <User className="mr-2 h-4 w-4" />
-            <span>Profile</span>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
+            <Avatar className="h-9 w-9 border border-border overflow-hidden">
+              <img
+                src={getAvatarUrl()}
+                alt="User avatar"
+                className="w-full h-full object-cover"
+              />
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="end" forceMount>
+          <div className="px-2 py-1.5 text-sm font-medium">{user?.username}</div>
+          <Link href="/profile">
+            <DropdownMenuItem className="cursor-pointer">
+              <User className="mr-2 h-4 w-4" />
+              <span>Profile</span>
+            </DropdownMenuItem>
+          </Link>
+          <Link href="/history">
+            <DropdownMenuItem className="cursor-pointer">
+              <History className="mr-2 h-4 w-4" />
+              <span>Transformation History</span>
+            </DropdownMenuItem>
+          </Link>
+          <DropdownMenuItem 
+            className="text-destructive focus:text-destructive cursor-pointer" 
+            onSelect={(e) => {
+              e.preventDefault();
+              setShowLogoutDialog(true);
+            }}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            <span>Log out</span>
           </DropdownMenuItem>
-        </Link>
-        <Link href="/history">
-          <DropdownMenuItem className="cursor-pointer">
-            <History className="mr-2 h-4 w-4" />
-            <span>Transformation History</span>
-          </DropdownMenuItem>
-        </Link>
-        <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out? You'll need to sign in again to access your account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout} className="bg-destructive hover:bg-destructive/90">
+              Log out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
 function MobileLogoutButton() {
   const { logout } = useAuth();
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   
   const handleLogout = () => {
-    if (confirm("Are you sure you want to log out?")) {
-      logout();
-    }
+    logout();
+    setShowLogoutDialog(false);
   };
   
   return (
-    <Button 
-      variant="ghost" 
-      className="justify-start text-destructive hover:text-destructive hover:bg-destructive/10 w-full"
-      onClick={handleLogout}
-    >
-      <LogOut className="mr-2 h-4 w-4" />
-      Log out
-    </Button>
+    <>
+      <Button 
+        variant="ghost" 
+        className="justify-start text-destructive hover:text-destructive hover:bg-destructive/10 w-full"
+        onClick={() => setShowLogoutDialog(true)}
+      >
+        <LogOut className="mr-2 h-4 w-4" />
+        Log out
+      </Button>
+
+      <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Logout</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to log out? You'll need to sign in again to access your account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout} className="bg-destructive hover:bg-destructive/90">
+              Log out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

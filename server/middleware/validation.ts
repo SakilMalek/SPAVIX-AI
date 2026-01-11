@@ -16,7 +16,7 @@ export const signupSchema = z.object({
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number')
     .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
-  profilePicture: z.string().url('Invalid profile picture URL').max(2048).optional(),
+  profilePicture: z.string().max(2048).optional(),
 });
 
 export const loginSchema = z.object({

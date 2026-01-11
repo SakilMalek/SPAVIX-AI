@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { AVATARS } from "@/config/avatars";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 declare global {
   interface Window {
@@ -15,6 +16,7 @@ declare global {
 
 export default function SignupPage() {
   const [, setLocation] = useLocation();
+  const { refreshAuth } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -53,16 +55,22 @@ export default function SignupPage() {
   const validateForm = (): boolean => {
     const newErrors: typeof errors = {};
 
-    if (!email) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       newErrors.email = "Please enter a valid email address";
     }
 
     if (!password) {
       newErrors.password = "Password is required";
-    } else if (password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    } else if (password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
+    } else if (!/[a-z]/.test(password)) {
+      newErrors.password = "Password must contain at least one lowercase letter";
+    } else if (!/[A-Z]/.test(password)) {
+      newErrors.password = "Password must contain at least one uppercase letter";
+    } else if (!/[0-9]/.test(password)) {
+      newErrors.password = "Password must contain at least one number";
+    } else if (!/[^A-Za-z0-9]/.test(password)) {
+      newErrors.password = "Password must contain at least one special character (!@#$%^&*)";
     }
 
     if (!confirmPassword) {
@@ -94,13 +102,26 @@ export default function SignupPage() {
 
       if (!response.ok) {
         const error = await response.json();
+        console.error('Signup failed:', error);
         toast.error(error.error || "Signup failed");
+        setIsLoading(false);
         return;
       }
 
       const data = await response.json();
-      localStorage.setItem("token", data.token);
+      // Store both access and refresh tokens
+      localStorage.setItem("token", data.accessToken);
+      localStorage.setItem("refreshToken", data.refreshToken);
+      if (data.user?.picture) {
+        localStorage.setItem("userProfilePicture", data.user.picture);
+      }
+      if (data.user?.name) {
+        localStorage.setItem("userName", data.user.name);
+      }
       toast.success("Account created successfully!");
+      
+      // Refresh auth context with new user data
+      await refreshAuth();
       setLocation("/dashboard");
     } catch (error: any) {
       toast.error(error.message || "Signup failed");
@@ -148,7 +169,7 @@ export default function SignupPage() {
               <label className="text-sm font-medium">Password</label>
               <Input
                 type="password"
-                placeholder="At least 6 characters"
+                placeholder="Create a strong password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
@@ -158,6 +179,9 @@ export default function SignupPage() {
                 className={errors.password ? "border-destructive" : ""}
                 required
               />
+              <p className="text-xs text-muted-foreground">
+                Must be 8+ characters with uppercase, lowercase, number, and special character
+              </p>
               {errors.password && (
                 <p className="text-xs text-destructive font-medium">{errors.password}</p>
               )}

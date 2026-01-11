@@ -6,59 +6,42 @@ export default function HomePage() {
   const [, setLocation] = useLocation();
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Navigation Header */}
-      <header className="border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">S</span>
-              </div>
-              <span className="ml-2 text-xl font-bold text-gray-900">SPAVIX</span>
-            </div>
-
-            {/* Navigation Links */}
-            <nav className="hidden md:flex space-x-8">
-              <a href="#" className="text-gray-900 hover:text-gray-600 px-3 py-2 text-sm font-medium">
-                Home
-              </a>
-              <a href="#" className="text-gray-500 hover:text-gray-900 px-3 py-2 text-sm font-medium">
-                Design
-              </a>
-              <a href="#" className="text-gray-500 hover:text-gray-900 px-3 py-2 text-sm font-medium">
-                Gallery
-              </a>
-              <a href="#" className="text-gray-500 hover:text-gray-900 px-3 py-2 text-sm font-medium">
-                Pricing
-              </a>
-            </nav>
-
-            {/* Sign In / Sign Up Buttons */}
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                onClick={() => setLocation("/login")}
-                className="text-gray-700 hover:text-gray-900 font-medium"
-              >
-                Sign In
-              </Button>
-              <Button
-                onClick={() => setLocation("/signup")}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-medium"
-              >
-                Sign Up
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-purple-50">
       {/* Hero Section */}
       <main id="main-content" className="relative">
         <div className="bg-gradient-to-br from-purple-50 via-blue-50 to-purple-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-32">
+          {/* Navigation Header - Floating on Background */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+            <div className="flex justify-between items-center">
+              {/* Logo */}
+              <div className="flex items-center">
+                <img 
+                  src="/logo-light.png" 
+                  alt="SPAVIX Logo" 
+                  className="h-16 w-auto"
+                />
+              </div>
+
+              {/* Sign In / Sign Up Buttons */}
+              <div className="flex items-center space-x-4">
+                <Button
+                  variant="ghost"
+                  onClick={() => setLocation("/login")}
+                  className="text-gray-700 hover:text-gray-900 font-medium hover:bg-white/50"
+                >
+                  Sign In
+                </Button>
+                <Button
+                  onClick={() => setLocation("/signup")}
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-medium"
+                >
+                  Sign Up
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-32">
             <div className="text-center">
               <h1 className="text-5xl font-bold text-gray-900 sm:text-6xl lg:text-7xl">
                 Transform Your

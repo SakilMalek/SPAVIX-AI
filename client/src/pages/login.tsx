@@ -118,9 +118,11 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-center mb-4">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, rgb(147, 51, 234), rgb(37, 99, 235))' }}>
-              <span className="text-white font-bold text-lg">S</span>
-            </div>
+            <img 
+              src="/logo-light.png" 
+              alt="SPAVIX Logo" 
+              className="h-12 w-auto"
+            />
           </div>
           <CardTitle className="text-2xl text-center">Welcome Back</CardTitle>
           <CardDescription className="text-center">

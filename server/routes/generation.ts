@@ -50,10 +50,22 @@ generationRoutes.post('/', authMiddleware, async (req: AuthRequest, res: Respons
 
     console.log('Generating image with prompt for:', { roomType, style, projectId });
 
-    const prompt = GeminiImageService.buildPrompt(roomType, style, materials);
+    // Stage 1: Detect room type from image
+    console.log('🔍 Stage 1: Detecting room type...');
+    let detectedRoomType: string;
+    try {
+      detectedRoomType = await GeminiImageService.detectRoomType(imageUrl);
+      console.log(`✅ Room detected: ${detectedRoomType}`);
+    } catch (error: any) {
+      console.warn('⚠️ Room detection failed, using user-provided room type:', roomType);
+      detectedRoomType = roomType; // Fallback to user-provided room type
+    }
+
+    // Stage 2: Build prompt with detected room type and generate image
+    const prompt = GeminiImageService.buildPrompt(detectedRoomType, style, materials);
     console.log('Generated prompt length:', prompt.length);
 
-    console.log('Calling Gemini 2.5 Flash Image (img2img) for transformation...');
+    console.log('🎨 Stage 2: Calling Gemini 2.5 Flash Image (img2img) for transformation...');
     let imageBuffer: Buffer;
     try {
       imageBuffer = await GeminiImageService.generateImage(prompt, imageUrl);
@@ -412,8 +424,20 @@ generationRoutes.post('/:id/history', authMiddleware, asyncHandler(async (req: A
     throw Errors.notFound('Generation not found');
   }
 
-  // Generate new version
-  const prompt = GeminiImageService.buildPrompt(roomType, style, materials);
+  // Generate new version with 2-stage pipeline
+  // Stage 1: Detect room type
+  console.log('🔍 Stage 1: Detecting room type for new version...');
+  let detectedRoomType: string;
+  try {
+    detectedRoomType = await GeminiImageService.detectRoomType(imageUrl);
+    console.log(`✅ Room detected: ${detectedRoomType}`);
+  } catch (error: any) {
+    console.warn('⚠️ Room detection failed, using user-provided room type:', roomType);
+    detectedRoomType = roomType;
+  }
+
+  // Stage 2: Generate with detected room type
+  const prompt = GeminiImageService.buildPrompt(detectedRoomType, style, materials);
   let imageBuffer: Buffer;
   try {
     imageBuffer = await GeminiImageService.generateImage(prompt, imageUrl);

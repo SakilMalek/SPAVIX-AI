@@ -3,6 +3,7 @@ import { GeminiImageService } from '../services/gemini';
 import { ShoppingListService } from '../services/shopping';
 import { Database } from '../db';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { checkUsageLimit, trackUsage } from '../middleware/subscription';
 import { generateSecureShareId } from '../utils/shareId';
 import { logger } from '../utils/logger';
 import { Errors, asyncHandler } from '../middleware/errorHandler.js';
@@ -24,7 +25,7 @@ interface GenerationRequest {
   projectId?: string;
 }
 
-generationRoutes.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+generationRoutes.post('/', authMiddleware, checkUsageLimit('transformation'), trackUsage('transformation'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
       res.status(401).json({ error: 'Not authenticated' });

@@ -69,10 +69,10 @@ export default function GalleryPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {GALLERY_ITEMS.map((item) => (
             <Card key={item.id} className="overflow-hidden border-none shadow-xl glass-panel group">
-              <CardContent className="p-0 aspect-video relative">
+              <CardContent className="p-0 aspect-square relative">
                 <TransformationSlider 
                   beforeImage={item.before}
                   afterImage={item.after}

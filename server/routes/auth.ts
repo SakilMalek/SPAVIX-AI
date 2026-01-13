@@ -337,7 +337,22 @@ authRoutes.get('/me', authMiddleware, asyncHandler(async (req: AuthRequest, res:
     throw Errors.notFound('User');
   }
 
-  res.json({ id: user.id, email: user.email, picture: user.picture, name: user.name });
+  // Get subscription info
+  const subResult = await Database.query(
+    `SELECT plan_name, status FROM user_subscriptions WHERE user_id = $1`,
+    [user.id]
+  );
+
+  const subscription = subResult.rows[0] || { plan_name: 'starter', status: 'active' };
+
+  res.json({ 
+    id: user.id, 
+    email: user.email, 
+    picture: user.picture, 
+    name: user.name,
+    subscription_plan: subscription.plan_name,
+    subscription_status: subscription.status
+  });
 }));
 
 authRoutes.put('/me', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {

@@ -303,8 +303,12 @@ export default function ProfilePage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to change plan");
+        try {
+          const error = await response.json();
+          throw new Error(error.error || `Failed to change plan (${response.status})`);
+        } catch (parseError) {
+          throw new Error(`Failed to change plan (${response.status}): ${response.statusText}`);
+        }
       }
 
       // Refresh auth first to update user context

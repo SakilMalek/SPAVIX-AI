@@ -35,7 +35,8 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
       }
 
       // Use /api/auth/me which already returns subscription data
-      const response = await fetch('/api/auth/me', {
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl('/api/auth/me'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -51,8 +52,12 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
           return;
         }
 
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch subscription');
+        try {
+          const error = await response.json();
+          throw new Error(error.error || `Failed to fetch subscription (${response.status})`);
+        } catch (parseError) {
+          throw new Error(`Failed to fetch subscription (${response.status}): ${response.statusText}`);
+        }
       }
 
       const data = await response.json();

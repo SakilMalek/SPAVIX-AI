@@ -338,12 +338,18 @@ export class SubscriptionService {
 
       const newPlanId = planResult.rows[0].id;
 
-      // Update user's subscription
+      // Use UPSERT to handle case where user might not have a subscription yet
+      const now = new Date();
+      const billingPeriodEnd = new Date(now);
+      billingPeriodEnd.setMonth(billingPeriodEnd.getMonth() + 1);
+
       await Database.query(
-        `UPDATE user_subscriptions 
-         SET plan_id = $1, updated_at = NOW()
-         WHERE user_id = $2`,
-        [newPlanId, userId]
+        `INSERT INTO user_subscriptions (user_id, plan_id, status, current_period_start, current_period_end)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id) DO UPDATE SET
+           plan_id = EXCLUDED.plan_id,
+           updated_at = NOW()`,
+        [userId, newPlanId, 'active', now, billingPeriodEnd]
       );
 
       logger.info('User plan changed', { userId, newPlan: newPlanName });

@@ -4,6 +4,7 @@ import ConnectPgSimple from "connect-pg-simple";
 import { createServer } from "http";
 import { validateRequiredSecrets, getSessionSecret } from "./config/secrets";
 import { rateLimit, startRateLimitCleanup } from "./middleware/rateLimit";
+import { subscriptionRateLimit, startSubscriptionRateLimitCleanup } from "./middleware/subscriptionRateLimit";
 import { errorHandler } from "./middleware/errorHandler";
 import { securityHeaders, httpsRedirect } from "./middleware/securityHeaders";
 import { requestLogger } from "./middleware/requestLogger";
@@ -108,26 +109,20 @@ if (isProduction) {
   );
 }
 
-// Rate limiting for expensive operations (POST/PUT/DELETE only)
-// GET requests for viewing history should not be rate limited
-// Disabled in development mode, enabled in production
+// Subscription-based rate limiting for generation endpoint
+// Applies different limits based on user's subscription plan
 if (isProduction) {
   app.use(
     "/api/generations",
     (req, res, next) => {
-      // Only apply strict rate limiting to POST (create), PUT, DELETE operations
+      // Only apply rate limiting to POST (create), PUT, DELETE operations
       // GET requests are allowed freely
       if (req.method === "GET") {
         return next();
       }
       
-      // Apply rate limiting to POST/PUT/DELETE in production only
-      rateLimit({
-        windowMs: 60 * 60 * 1000, // 1 hour
-        max: 10, // 10 creations per hour per user
-        keyGenerator: (req) => (req as any).user?.id || req.ip || "unknown",
-        message: "Generation limit exceeded, please try again later.",
-      })(req, res, next);
+      // Apply subscription-based rate limiting to POST/PUT/DELETE
+      subscriptionRateLimit(req, res, next);
     }
   );
 } else {
@@ -208,6 +203,7 @@ app.use((req, res, next) => {
 
   // Start rate limit cleanup
   startRateLimitCleanup();
+  startSubscriptionRateLimitCleanup();
 
   await registerRoutes(httpServer, app);
 

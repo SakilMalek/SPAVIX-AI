@@ -26,6 +26,49 @@ export interface UserPlanInfo {
 
 export class SubscriptionService {
   /**
+   * Create a new subscription for a user (called on signup)
+   */
+  static async createSubscription(userId: string, planName: string = 'starter'): Promise<void> {
+    try {
+      // Get plan by name
+      const planResult = await Database.query(
+        'SELECT id FROM subscription_plans WHERE name = $1',
+        [planName.toLowerCase()]
+      );
+      
+      if (planResult.rows.length === 0) {
+        throw new Error(`Plan not found: ${planName}`);
+      }
+      
+      const planId = (planResult.rows as any[])[0].id;
+
+      const now = new Date();
+      const billingPeriodEnd = new Date(now);
+      billingPeriodEnd.setMonth(billingPeriodEnd.getMonth() + 1);
+
+      // Use UPSERT to handle case where user already has a subscription
+      await Database.query(
+        `INSERT INTO user_subscriptions (
+          user_id, plan_id, status, current_period_start, current_period_end
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (user_id) DO UPDATE SET
+          plan_id = EXCLUDED.plan_id,
+          status = 'active',
+          current_period_start = EXCLUDED.current_period_start,
+          current_period_end = EXCLUDED.current_period_end,
+          updated_at = NOW()`,
+        [userId, planId, 'active', now, billingPeriodEnd]
+      );
+
+      logger.info('Subscription created for user', { userId, plan: planName });
+    } catch (error) {
+      logger.error('Failed to create subscription', error as Error, { userId, planName });
+      throw error;
+    }
+  }
+
+  /**
    * Get user's current plan with subscription details
    */
   static async getUserPlan(userId: string): Promise<UserPlanInfo | null> {
@@ -217,7 +260,7 @@ export class SubscriptionService {
 
       const { subscription } = planInfo;
 
-      // Upsert usage tracking
+      // Upsert usage tracking (using actual column names: resource_type and count)
       await Database.query(
         `INSERT INTO usage_tracking (user_id, resource_type, count, period_start, period_end, created_at, updated_at)
          VALUES ($1, $2, 1, $3, $4, NOW(), NOW())

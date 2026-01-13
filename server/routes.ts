@@ -39,6 +39,7 @@ export async function registerRoutes(
 
   // Register subscription routes
   app.use("/api/subscriptions", subscriptionRoutes);
+  app.use("/api/subscription", subscriptionRoutes);
 
   // Register Stripe webhook (must be before express.json middleware in some cases)
   app.use("/api/stripe", stripeWebhookRoutes);

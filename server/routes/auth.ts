@@ -11,6 +11,7 @@ import { Errors, asyncHandler } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
 import { emailService } from '../services/email.js';
 import { TokenManager } from '../utils/tokenManager.js';
+import { SubscriptionService } from '../services/subscription.js';
 
 export const authRoutes = Router();
 
@@ -37,6 +38,15 @@ authRoutes.post('/signup', asyncHandler(async (req: AuthRequest, res: Response):
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await Database.createUser(email, passwordHash, undefined, profilePicture);
+
+  // Create subscription for new user (defaults to Starter plan)
+  try {
+    await SubscriptionService.createSubscription(user.id, 'starter');
+    logger.info('Subscription created for new user', { userId: user.id, plan: 'starter' });
+  } catch (error) {
+    logger.error('Failed to create subscription for new user', error instanceof Error ? error : new Error(String(error)), { userId: user.id });
+    // Don't fail signup if subscription creation fails
+  }
 
   // Generate token pair with refresh token
   const tokenPair = TokenManager.generateTokenPair(user.id, email, rememberMe);
@@ -219,6 +229,15 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
         picture: picture || undefined,
       };
       logger.logAuth('User created via Google OAuth', user.id, { email });
+
+      // Create subscription for new Google OAuth user (defaults to Starter plan)
+      try {
+        await SubscriptionService.createSubscription(user.id, 'starter');
+        logger.info('Subscription created for Google OAuth user', { userId: user.id, plan: 'starter' });
+      } catch (error) {
+        logger.error('Failed to create subscription for Google OAuth user', error instanceof Error ? error : new Error(String(error)), { userId: user.id });
+        // Don't fail OAuth flow if subscription creation fails
+      }
     } else {
       if (name || picture) {
         await Database.updateUserProfile(user.id, name, picture);
@@ -339,18 +358,20 @@ authRoutes.get('/me', authMiddleware, asyncHandler(async (req: AuthRequest, res:
 
   // Get subscription info
   const subResult = await Database.query(
-    `SELECT plan_name, status FROM user_subscriptions WHERE user_id = $1`,
+    `SELECT us.status, sp.name FROM user_subscriptions us
+     JOIN subscription_plans sp ON us.plan_id = sp.id
+     WHERE us.user_id = $1`,
     [user.id]
   );
 
-  const subscription = subResult.rows[0] || { plan_name: 'starter', status: 'active' };
+  const subscription = subResult.rows[0] || { name: 'starter', status: 'active' };
 
   res.json({ 
     id: user.id, 
     email: user.email, 
     picture: user.picture, 
     name: user.name,
-    subscription_plan: subscription.plan_name,
+    subscription_plan: subscription.name,
     subscription_status: subscription.status
   });
 }));
@@ -503,6 +524,128 @@ authRoutes.post('/reset-password', asyncHandler(async (req: AuthRequest, res: Re
   logger.logAuth('Password reset successfully', resetTokenRecord.user_id);
 
   res.json({ message: 'Password has been reset successfully. You can now login with your new password.' });
+}));
+
+authRoutes.post('/update-profile', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    throw Errors.unauthorized('Not authenticated');
+  }
+
+  const { name } = req.body;
+
+  if (!name || typeof name !== 'string') {
+    throw Errors.validationError('Name is required');
+  }
+
+  if (name.trim().length === 0) {
+    throw Errors.validationError('Name cannot be empty');
+  }
+
+  await Database.updateUserProfile(req.user.id, name);
+
+  logger.info('Profile updated', { userId: req.user.id });
+
+  res.json({
+    success: true,
+    message: 'Profile updated successfully',
+  });
+}));
+
+authRoutes.patch('/profile', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    throw Errors.unauthorized('Not authenticated');
+  }
+
+  const { profilePicture } = req.body;
+
+  if (!profilePicture || typeof profilePicture !== 'string') {
+    throw Errors.validationError('Profile picture is required');
+  }
+
+  await Database.query(
+    'UPDATE users SET picture = $1, updated_at = NOW() WHERE id = $2',
+    [profilePicture, req.user.id]
+  );
+
+  logger.info('Profile picture updated', { userId: req.user.id });
+
+  res.json({
+    success: true,
+    message: 'Profile picture updated successfully',
+  });
+}));
+
+authRoutes.post('/upload-picture', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    throw Errors.unauthorized('Not authenticated');
+  }
+
+  // Get file from FormData (sent as base64 from frontend)
+  const { file } = req.body;
+  
+  if (!file) {
+    throw Errors.validationError('No file uploaded');
+  }
+
+  // Validate that it's a data URL (base64 encoded image)
+  if (typeof file !== 'string' || !file.startsWith('data:image/')) {
+    throw Errors.validationError('File must be a valid image');
+  }
+
+  // Update user profile picture
+  await Database.query(
+    'UPDATE users SET picture = $1, updated_at = NOW() WHERE id = $2',
+    [file, req.user.id]
+  );
+
+  logger.info('Profile picture updated', { userId: req.user.id });
+
+  res.json({
+    success: true,
+    message: 'Profile picture updated successfully',
+    picture: file,
+  });
+}));
+
+authRoutes.get('/usage', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    throw Errors.unauthorized('Not authenticated');
+  }
+
+  // Get user's subscription
+  const subResult = await Database.query(
+    `SELECT current_period_start, current_period_end FROM user_subscriptions WHERE user_id = $1`,
+    [req.user.id]
+  );
+
+  if ((subResult.rows as any[]).length === 0) {
+    res.json({
+      transformations: 0,
+      limit: 5,
+    });
+    return;
+  }
+
+  const { current_period_start, current_period_end } = (subResult.rows as any[])[0];
+
+  // Get transformation usage for current period
+  const usageResult = await Database.query(
+    `SELECT COALESCE(SUM(count), 0) as total_count 
+     FROM usage_tracking 
+     WHERE user_id = $1 
+     AND resource_type = 'transformation'
+     AND period_start = $2`,
+    [req.user.id, current_period_start]
+  );
+
+  const transformationCount = parseInt((usageResult.rows as any[])[0].total_count) || 0;
+
+  res.json({
+    transformations: transformationCount,
+    limit: 5,
+    period_start: current_period_start,
+    period_end: current_period_end,
+  });
 }));
 
 authRoutes.post('/logout', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {

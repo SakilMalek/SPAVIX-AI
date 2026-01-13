@@ -279,6 +279,40 @@ subscriptionRoutes.post('/checkout', authMiddleware, async (req: AuthRequest, re
 });
 
 /**
+ * POST /api/subscriptions/change-plan
+ * Change subscription plan (for testing/development)
+ */
+subscriptionRoutes.post('/change-plan', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { planName } = req.body;
+
+    if (!planName || !['starter', 'pro', 'business'].includes(planName)) {
+      res.status(400).json({ error: 'Invalid plan name. Must be starter, pro, or business' });
+      return;
+    }
+
+    // Update subscription plan in database
+    await SubscriptionService.changePlan(req.user.id, planName as 'starter' | 'pro' | 'business');
+
+    logger.info('Subscription plan changed', { userId: req.user.id, planName });
+
+    res.json({ 
+      success: true, 
+      message: `Successfully changed to ${planName} plan`,
+      planName 
+    });
+  } catch (error) {
+    logger.error('Failed to change subscription plan', error as Error, { userId: req.user?.id });
+    res.status(500).json({ error: 'Failed to change subscription plan' });
+  }
+});
+
+/**
  * POST /api/subscriptions/upgrade
  * Upgrade subscription plan (for already paying customers)
  */
@@ -307,7 +341,7 @@ subscriptionRoutes.post('/upgrade', authMiddleware, async (req: AuthRequest, res
     if (planInfo.plan.name === 'starter') {
       res.status(400).json({
         error: 'Free plan users must use checkout',
-        message: 'Use POST /api/subscriptions/checkout instead',
+        message: 'Use POST /api/subscription/checkout instead',
       });
       return;
     }

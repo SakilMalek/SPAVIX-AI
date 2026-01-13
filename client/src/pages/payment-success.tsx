@@ -29,7 +29,7 @@ export default function PaymentSuccessPage() {
         console.log("Payment success page - Payment link ID:", paymentLinkId);
 
         // Verify payment success on backend
-        const response = await fetch("/api/subscriptions/payment-success", {
+        const response = await fetch("/api/subscription/payment-success", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

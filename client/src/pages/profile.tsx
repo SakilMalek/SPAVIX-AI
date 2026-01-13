@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,8 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Shield, Zap, CreditCard, Loader, Camera, Edit2, Check, Key } from "lucide-react";
+import { User, Mail, Shield, Zap, CreditCard, Loader, Camera, Edit2, Check, Key, Sparkles, TrendingUp, Crown, ArrowRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useSubscription } from "@/context/SubscriptionContext";
 import { getAvatarImage } from "@/config/avatars";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -19,9 +20,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Progress } from "@/components/ui/progress";
 
 export default function ProfilePage() {
   const { user, refreshAuth } = useAuth();
+  const subscription = useSubscription();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -31,6 +34,10 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
+  const [usageData, setUsageData] = useState({ transformations: 0, limit: 5 });
+  const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -39,18 +46,50 @@ export default function ProfilePage() {
       if (!username) {
         setUsername(user.name || "");
       }
-      // Set selected avatar
-      if (!selectedAvatar && user.profilePicture && !user.profilePicture.startsWith("http")) {
+      // Set selected avatar (only if it's a preset avatar ID, not a URL or data URL)
+      if (!selectedAvatar && user.profilePicture && !user.profilePicture.startsWith("http") && !user.profilePicture.startsWith("data:")) {
         setSelectedAvatar(user.profilePicture);
       }
+      // Fetch usage data
+      fetchUsageData();
     }
   }, [user, username, selectedAvatar]);
 
+  // Force re-render when subscription changes
+  useEffect(() => {
+    // This effect runs whenever subscription changes, triggering a re-render
+  }, [subscription.subscription?.plan?.name]);
+
+  const fetchUsageData = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const { getApiUrl } = await import("@/config/api");
+      
+      const response = await fetch(getApiUrl("/api/auth/usage"), {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUsageData({
+          transformations: data.transformations || 0,
+          limit: data.limit || 5,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch usage data:", error);
+    }
+  };
+
   const getAvatarUrl = () => {
     if (!user?.profilePicture) return getAvatarImage("avatar-1");
-    if (user.profilePicture.startsWith("http")) {
+    // Check if it's a URL (http/https) or base64 data URL
+    if (user.profilePicture.startsWith("http") || user.profilePicture.startsWith("data:")) {
       return user.profilePicture;
     }
+    // Otherwise it's a preset avatar ID
     return getAvatarImage(user.profilePicture);
   };
 
@@ -175,6 +214,114 @@ export default function ProfilePage() {
     }
   };
 
+  const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB");
+      return;
+    }
+
+    setIsUploadingPicture(true);
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64String = event.target?.result as string;
+
+        const token = localStorage.getItem("token");
+        const { getApiUrl } = await import("@/config/api");
+
+        const response = await fetch(getApiUrl("/api/auth/upload-picture"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({ file: base64String }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to upload picture");
+        }
+
+        const data = await response.json();
+        await refreshAuth();
+        toast.success("Profile picture updated successfully!");
+        setIsAvatarDialogOpen(false);
+        setIsUploadingPicture(false);
+      };
+
+      reader.onerror = () => {
+        toast.error("Failed to read file");
+        setIsUploadingPicture(false);
+      };
+
+      reader.readAsDataURL(file);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to upload picture");
+      setIsUploadingPicture(false);
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const getTransformationUsage = () => {
+    if (!subscription.subscription) return { used: 0, limit: 5 };
+    
+    const planName = subscription.subscription.plan?.name || "starter";
+    if (planName === "pro" || planName === "business") {
+      return { used: 0, limit: -1 }; // Unlimited
+    }
+    
+    // For starter plan, get usage from subscription context
+    // This would need to be fetched from the API
+    return { used: 0, limit: 5 };
+  };
+
+  const handleUpgradePlan = async (planName: string) => {
+    setUpgradingPlan(planName);
+    try {
+      const token = localStorage.getItem("token");
+      const { getApiUrl } = await import("@/config/api");
+
+      const response = await fetch(getApiUrl("/api/subscriptions/change-plan"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ planName }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to change plan");
+      }
+
+      // Refresh auth first to update user context
+      await refreshAuth();
+      
+      // Then refetch subscription data
+      await subscription.refetch();
+      
+      const actionText = planName === "starter" ? "downgraded to" : "upgraded to";
+      toast.success(`Successfully ${actionText} ${planName} plan!`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to change plan");
+    } finally {
+      setUpgradingPlan(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -197,39 +344,66 @@ export default function ProfilePage() {
                   </div>
                 </div>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-2xl" aria-describedby="avatar-dialog-description">
                 <DialogHeader>
-                  <DialogTitle>Choose Avatar</DialogTitle>
+                  <DialogTitle>Choose Avatar or Upload Picture</DialogTitle>
+                  <p id="avatar-dialog-description" className="sr-only">
+                    Upload a profile picture from your device or choose from preset avatars
+                  </p>
                 </DialogHeader>
-                <ScrollArea className="h-96">
-                  <div className="grid grid-cols-4 gap-4 p-4">
-                    {Array.from({ length: 24 }, (_, i) => {
-                      const avatarId = `avatar-${i + 1}`;
-                      const isSelected = selectedAvatar === avatarId;
-                      return (
-                        <button
-                          key={avatarId}
-                          onClick={() => handleAvatarChange(avatarId)}
-                          className={cn(
-                            "relative group rounded-lg overflow-hidden border-2 transition-all",
-                            isSelected ? "border-primary" : "border-transparent hover:border-primary/50"
-                          )}
-                        >
-                          <img
-                            src={getAvatarImage(avatarId)}
-                            alt={`Avatar ${i + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                          {isSelected && (
-                            <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                              <Check className="w-6 h-6 text-primary" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                <div className="space-y-4">
+                  <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}>
+                    <Camera className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm font-medium">Upload from Device</p>
+                    <p className="text-xs text-muted-foreground">PNG, JPG up to 5MB</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfilePictureUpload}
+                      className="hidden"
+                      disabled={isUploadingPicture}
+                    />
                   </div>
-                </ScrollArea>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-muted"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">Or choose preset</span>
+                    </div>
+                  </div>
+                  <ScrollArea className="h-96">
+                    <div className="grid grid-cols-4 gap-4 p-4">
+                      {Array.from({ length: 24 }, (_, i) => {
+                        const avatarId = `avatar-${i + 1}`;
+                        const isSelected = selectedAvatar === avatarId;
+                        return (
+                          <button
+                            key={avatarId}
+                            onClick={() => handleAvatarChange(avatarId)}
+                            className={cn(
+                              "relative group rounded-lg overflow-hidden border-2 transition-all",
+                              isSelected ? "border-primary" : "border-transparent hover:border-primary/50"
+                            )}
+                          >
+                            <img
+                              src={getAvatarImage(avatarId)}
+                              alt={`Avatar ${i + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            {isSelected && (
+                              <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                                <Check className="w-6 h-6 text-primary" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
               </DialogContent>
             </Dialog>
             <div>
@@ -242,6 +416,211 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+
+          {/* Plan Upgrade Section */}
+          <Card className="glass-panel border-none shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <Crown className="w-5 h-5 text-primary" />
+                Upgrade Your Plan
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Starter Plan */}
+                <div 
+                  key={`starter-${subscription.subscription?.plan?.name}`}
+                  className={cn(
+                    "p-4 rounded-lg border-2 transition-all",
+                    subscription.subscription?.plan?.name?.toLowerCase() === "starter" 
+                      ? "border-primary bg-primary/5" 
+                      : "border-muted hover:border-primary/50"
+                  )}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">Starter</h3>
+                    {subscription.subscription?.plan?.name?.toLowerCase() === "starter" && (
+                      <Badge className="bg-primary/20 text-primary">Current</Badge>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold mb-2">Free</p>
+                  <ul className="text-sm space-y-2 mb-4 text-muted-foreground">
+                    <li>✓ 5 transformations/month</li>
+                    <li>✓ Basic features</li>
+                    <li>✓ Standard support</li>
+                  </ul>
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => handleUpgradePlan("starter")}
+                    disabled={subscription.subscription?.plan?.name === "starter" || upgradingPlan !== null}
+                  >
+                    {upgradingPlan === "starter" ? (
+                      <>
+                        <Loader className="w-4 h-4 mr-2 animate-spin" />
+                        Downgrading...
+                      </>
+                    ) : subscription.subscription?.plan?.name === "starter" ? (
+                      "Current Plan"
+                    ) : (
+                      <>
+                        Downgrade <ArrowRight className="w-4 h-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Pro Plan */}
+                <div 
+                  key={`pro-${subscription.subscription?.plan?.name}`}
+                  className={cn(
+                    "p-4 rounded-lg border-2 transition-all relative",
+                    subscription.subscription?.plan?.name?.toLowerCase() === "pro" 
+                      ? "border-primary bg-primary/5" 
+                      : "border-muted hover:border-primary/50"
+                  )}>
+                  <div className="absolute -top-3 left-4">
+                    <Badge className="bg-primary text-primary-foreground">Popular</Badge>
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">Pro</h3>
+                    {subscription.subscription?.plan?.name?.toLowerCase() === "pro" && (
+                      <Badge className="bg-primary/20 text-primary">Current</Badge>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold mb-2">$9<span className="text-sm text-muted-foreground">/month</span></p>
+                  <ul className="text-sm space-y-2 mb-4 text-muted-foreground">
+                    <li>✓ Unlimited transformations</li>
+                    <li>✓ Advanced features</li>
+                    <li>✓ Priority support</li>
+                    <li>✓ HD exports</li>
+                  </ul>
+                  <Button 
+                    className="w-full"
+                    onClick={() => handleUpgradePlan("pro")}
+                    disabled={subscription.subscription?.plan?.name === "pro" || upgradingPlan !== null}
+                  >
+                    {upgradingPlan === "pro" ? (
+                      <>
+                        <Loader className="w-4 h-4 mr-2 animate-spin" />
+                        Upgrading...
+                      </>
+                    ) : subscription.subscription?.plan?.name === "pro" ? (
+                      "Current Plan"
+                    ) : (
+                      <>
+                        Upgrade <ArrowRight className="w-4 h-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Business Plan */}
+                <div 
+                  key={`business-${subscription.subscription?.plan?.name}`}
+                  className={cn(
+                    "p-4 rounded-lg border-2 transition-all",
+                    subscription.subscription?.plan?.name?.toLowerCase() === "business" 
+                      ? "border-primary bg-primary/5" 
+                      : "border-muted hover:border-primary/50"
+                  )}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">Business</h3>
+                    {subscription.subscription?.plan?.name?.toLowerCase() === "business" && (
+                      <Badge className="bg-primary/20 text-primary">Current</Badge>
+                    )}
+                  </div>
+                  <p className="text-2xl font-bold mb-2">$29<span className="text-sm text-muted-foreground">/month</span></p>
+                  <ul className="text-sm space-y-2 mb-4 text-muted-foreground">
+                    <li>✓ Unlimited transformations</li>
+                    <li>✓ All Pro features</li>
+                    <li>✓ Team collaboration</li>
+                    <li>✓ API access</li>
+                  </ul>
+                  <Button 
+                    className="w-full"
+                    onClick={() => handleUpgradePlan("business")}
+                    disabled={subscription.subscription?.plan?.name === "business" || upgradingPlan !== null}
+                  >
+                    {upgradingPlan === "business" ? (
+                      <>
+                        <Loader className="w-4 h-4 mr-2 animate-spin" />
+                        Upgrading...
+                      </>
+                    ) : subscription.subscription?.plan?.name === "business" ? (
+                      "Current Plan"
+                    ) : (
+                      <>
+                        Upgrade <ArrowRight className="w-4 h-4 ml-2" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Subscription Status Section */}
+          {subscription.subscription && (
+            <Card className="glass-panel border-none shadow-xl bg-linear-to-br from-primary/5 to-primary/10">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                    Subscription Status
+                  </CardTitle>
+                  <Badge className="bg-primary/20 text-primary hover:bg-primary/30 border-none">
+                    {subscription.subscription.plan?.name || "starter"}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg bg-background/50 border border-primary/10">
+                    <p className="text-xs text-muted-foreground mb-1">Plan</p>
+                    <p className="text-lg font-semibold capitalize">{subscription.subscription.plan?.name || "starter"}</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-background/50 border border-primary/10">
+                    <p className="text-xs text-muted-foreground mb-1">Status</p>
+                    <p className="text-lg font-semibold capitalize">{subscription.subscription.status || "active"}</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-background/50 border border-primary/10">
+                    <p className="text-xs text-muted-foreground mb-1">Billing Cycle</p>
+                    <p className="text-sm font-semibold">Monthly</p>
+                  </div>
+                </div>
+
+                {/* Transformation Tracker for Starter Plan */}
+                {subscription.subscription.plan?.name === "starter" && (
+                  <div className="space-y-3 p-4 rounded-lg bg-background/50 border border-primary/10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-primary" />
+                        <p className="text-sm font-semibold">Transformations This Month</p>
+                      </div>
+                      <Badge variant="outline" className="text-primary">{usageData.transformations} / {usageData.limit}</Badge>
+                    </div>
+                    <Progress value={(usageData.transformations / usageData.limit) * 100} className="h-2" />
+                    <p className="text-xs text-muted-foreground">
+                      You have {usageData.limit - usageData.transformations} transformation{usageData.limit - usageData.transformations !== 1 ? 's' : ''} remaining this month
+                    </p>
+                  </div>
+                )}
+
+                {(subscription.subscription.plan?.name === "pro" || subscription.subscription.plan?.name === "business") && (
+                  <div className="space-y-3 p-4 rounded-lg bg-background/50 border border-primary/10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-primary" />
+                        <p className="text-sm font-semibold">Transformations</p>
+                      </div>
+                      <Badge className="bg-primary/20 text-primary hover:bg-primary/30 border-none">Unlimited</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Enjoy unlimited transformations with your plan</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <Card className="md:col-span-2 glass-panel border-none shadow-xl">

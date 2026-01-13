@@ -107,6 +107,8 @@ export const trackUsage = (resourceType: 'transformation' | 'api_call' | 'export
     res.send = function (data: any): Response {
       // Only track on successful responses (2xx status codes)
       if (res.statusCode >= 200 && res.statusCode < 300 && req.user) {
+        // Track usage in background but don't wait for it
+        // This ensures response is sent immediately
         SubscriptionService.trackUsage(req.user.id, resourceType)
           .catch(error => {
             logger.error('Failed to track usage', error as Error, { 

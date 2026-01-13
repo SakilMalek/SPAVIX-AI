@@ -76,7 +76,10 @@ app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: isProduction ? 5 : 50, // 5 attempts in production, 50 in development
-    keyGenerator: (req) => req.ip || "unknown",
+    keyGenerator: (req) => {
+      const email = req.body?.email || req.ip || "unknown";
+      return `${req.ip}-${email}`;
+    },
     message: "Too many login attempts, please try again later.",
   })
 );

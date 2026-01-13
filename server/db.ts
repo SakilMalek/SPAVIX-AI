@@ -14,18 +14,24 @@ export function getPool(): Pool {
 
     console.log('Connecting to database...');
 
-    pool = new Pool({
+    const poolConfig: any = {
       connectionString,
-      ssl: {
-        rejectUnauthorized: false,
-      },
       max: 20,                    // Increased from 10 for better concurrency
       min: 2,                     // Maintain minimum connections
       idleTimeoutMillis: 30000,   // Reduced from 60000 for faster cleanup
       connectionTimeoutMillis: 15000, // Increased to 15s for stable connections
       statement_timeout: 30000,   // Reduced from 60000 for query timeout
       application_name: 'spavix-api',
-    });
+    };
+
+    // Only use SSL in production
+    if (process.env.NODE_ENV === 'production') {
+      poolConfig.ssl = {
+        rejectUnauthorized: false,
+      };
+    }
+
+    pool = new Pool(poolConfig);
 
     pool.on('error', (err) => {
       console.error('Unexpected error on idle client', err);

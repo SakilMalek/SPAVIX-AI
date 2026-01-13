@@ -8,6 +8,8 @@ interface User {
   email: string;
   name: string;
   profilePicture: string;
+  subscription_plan?: string;
+  subscription_status?: string;
 }
 
 interface AuthContextType {
@@ -75,6 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: data.email,
             name: data.name || "",
             profilePicture: data.picture || "avatar-1",
+            subscription_plan: data.subscription_plan || "starter",
+            subscription_status: data.subscription_status || "active",
           });
         } else {
           // Token invalid on server

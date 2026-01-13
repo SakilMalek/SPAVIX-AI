@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { AuthProvider } from "@/hooks/use-auth";
+import { SubscriptionProvider } from "@/context/SubscriptionContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import NotFound from "@/pages/not-found";
@@ -24,6 +25,8 @@ import HistoryPage from "@/pages/history";
 import ProfilePage from "@/pages/profile";
 import EditorPage from "@/pages/editor";
 import ProjectsPage from "@/pages/projects";
+import PaymentSuccessPage from "@/pages/payment-success";
+import RazorpayRedirectPage from "@/pages/razorpay-redirect";
 
 function Router() {
   return (
@@ -48,6 +51,16 @@ function Router() {
       <Route path="/pricing">
         <ProtectedRoute>
           <PricingPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/payment-success">
+        <ProtectedRoute>
+          <PaymentSuccessPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/razorpay-redirect">
+        <ProtectedRoute>
+          <RazorpayRedirectPage />
         </ProtectedRoute>
       </Route>
       <Route path="/faq">
@@ -92,8 +105,10 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
             <AuthProvider>
-              <Toaster />
-              <Router />
+              <SubscriptionProvider>
+                <Toaster />
+                <Router />
+              </SubscriptionProvider>
             </AuthProvider>
           </TooltipProvider>
         </QueryClientProvider>

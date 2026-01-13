@@ -1,0 +1,37 @@
+-- Migration: 005_add_subscription_columns.sql
+-- Description: Add subscription-related columns to existing tables
+-- This works with the existing subscription schema
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_id UUID;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_id UUID;
+
+ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS features JSONB DEFAULT '{}';
+
+ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS limits JSONB DEFAULT '{}';
+
+ALTER TABLE user_subscriptions ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+
+ALTER TABLE usage_tracking ADD COLUMN IF NOT EXISTS feature_key VARCHAR(100);
+
+ALTER TABLE usage_tracking ADD COLUMN IF NOT EXISTS limit_per_month INT;
+
+ALTER TABLE usage_tracking ADD COLUMN IF NOT EXISTS period_start TIMESTAMP;
+
+ALTER TABLE usage_tracking ADD COLUMN IF NOT EXISTS period_end TIMESTAMP;
+
+ALTER TABLE usage_tracking ADD COLUMN IF NOT EXISTS reset_at TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_users_subscription_id ON users(subscription_id);
+
+CREATE INDEX IF NOT EXISTS idx_users_plan_id ON users(plan_id);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_plans_features ON subscription_plans USING GIN(features);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_plans_limits ON subscription_plans USING GIN(limits);
+
+CREATE INDEX IF NOT EXISTS idx_user_subscriptions_metadata ON user_subscriptions USING GIN(metadata);
+
+CREATE INDEX IF NOT EXISTS idx_usage_tracking_feature_key ON usage_tracking(feature_key);
+
+CREATE INDEX IF NOT EXISTS idx_usage_tracking_period ON usage_tracking(period_start, period_end);

@@ -65,8 +65,10 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('📝 Form submitted');
 
     if (!validateForm()) {
+      console.log('❌ Form validation failed');
       return;
     }
 
@@ -74,38 +76,79 @@ export default function LoginPage() {
       setIsLoading(true);
       setErrors({});
       const { getApiUrl } = await import("@/config/api");
-      const response = await fetch(getApiUrl("/api/auth/login"), {
+      const apiUrl = getApiUrl("/api/auth/login");
+      console.log('🔐 Attempting login to:', apiUrl);
+      console.log('📧 Email:', email);
+      console.log('🔒 Password length:', password.length);
+      console.log('📌 Remember me:', rememberMe);
+      
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, rememberMe }),
       });
 
+      console.log('📊 Login response status:', response.status);
+      console.log('📊 Response headers:', response.headers);
+      
       if (!response.ok) {
-        const error = await response.json();
-        console.error('Login failed:', error);
-        toast.error(error.error || "Login failed");
+        let errorMessage = "Login failed";
+        try {
+          const error = await response.json();
+          console.error('❌ Login error response:', error);
+          errorMessage = error.error || error.message || "Login failed";
+        } catch (e) {
+          console.error('❌ Failed to parse error response:', e);
+          errorMessage = `Login failed (${response.status})`;
+        }
+        toast.error(errorMessage);
         setIsLoading(false);
         return;
       }
 
       const data = await response.json();
+      console.log('✅ Login successful, received tokens');
+      console.log('📦 Response data:', data);
+      
       // Store both access and refresh tokens
+      console.log('💾 Storing tokens to localStorage...');
       localStorage.setItem("token", data.accessToken);
       localStorage.setItem("refreshToken", data.refreshToken);
+      console.log('✅ Tokens stored');
+      
       if (data.user?.picture) {
         localStorage.setItem("userProfilePicture", data.user.picture);
       }
       if (data.user?.name) {
         localStorage.setItem("userName", data.user.name);
       }
+      
+      console.log('🔄 Calling refreshAuth()...');
       toast.success("Logged in successfully!");
-      await refreshAuth();
+      try {
+        await refreshAuth();
+        console.log('✅ refreshAuth() completed');
+      } catch (authError) {
+        console.error('❌ refreshAuth() failed:', authError);
+        throw authError;
+      }
       
       // Redirect to intended destination or dashboard
       const redirect = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
       sessionStorage.removeItem('redirectAfterLogin');
-      setLocation(redirect);
+      console.log('🔀 Redirecting to:', redirect);
+      console.log('🔀 Current location before redirect:', window.location.pathname);
+      
+      try {
+        // Use window.location.href for hard redirect to ensure page loads with new auth state
+        window.location.href = redirect;
+        console.log('✅ Redirect initiated');
+      } catch (redirectError) {
+        console.error('❌ Redirect failed:', redirectError);
+        throw redirectError;
+      }
     } catch (error: any) {
+      console.error('❌ Login exception:', error);
       toast.error(error.message || "Login failed");
     } finally {
       setIsLoading(false);

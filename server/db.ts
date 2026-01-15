@@ -20,7 +20,7 @@ export function getPool(): Pool {
       min: 2,                     // Maintain minimum connections
       idleTimeoutMillis: 30000,   // Reduced from 60000 for faster cleanup
       connectionTimeoutMillis: 15000, // Increased to 15s for stable connections
-      statement_timeout: 30000,   // Reduced from 60000 for query timeout
+      statement_timeout: 300000,  // Increased to 5 minutes for long-running queries (image generation)
       application_name: 'spavix-api',
     };
 

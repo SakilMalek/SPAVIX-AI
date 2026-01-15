@@ -55,9 +55,12 @@ export default function ProfilePage() {
     }
   }, [user, username, selectedAvatar]);
 
-  // Force re-render when subscription changes
+  // Force re-render when subscription changes and update usage data
   useEffect(() => {
-    // This effect runs whenever subscription changes, triggering a re-render
+    // Refetch usage data when plan changes
+    if (subscription.subscription?.plan?.name) {
+      fetchUsageData();
+    }
   }, [subscription.subscription?.plan?.name]);
 
   const fetchUsageData = async () => {
@@ -311,11 +314,17 @@ export default function ProfilePage() {
         }
       }
 
+      // Wait a brief moment for the backend to process
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       // Refresh auth first to update user context
       await refreshAuth();
       
-      // Then refetch subscription data
+      // Then refetch subscription data - this will trigger UI update
       await subscription.refetch();
+      
+      // Small delay to ensure state updates are processed
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       const actionText = planName === "starter" ? "downgraded to" : "upgraded to";
       toast.success(`Successfully ${actionText} ${planName} plan!`);

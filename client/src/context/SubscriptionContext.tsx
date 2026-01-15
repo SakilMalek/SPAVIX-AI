@@ -34,9 +34,9 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         return;
       }
 
-      // Use /api/auth/me which already returns subscription data
+      // Fetch full subscription data from /api/subscriptions/current
       const { getApiUrl } = await import("@/config/api");
-      const response = await fetch(getApiUrl('/api/auth/me'), {
+      const response = await fetch(getApiUrl('/api/subscriptions/current'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -62,16 +62,25 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
 
       const data = await response.json();
       
-      // Extract subscription info from /api/auth/me response
-      if (data.subscription_plan) {
+      // Extract subscription info from /api/subscriptions/current response
+      if (data.plan) {
         setSubscription({
-          id: data.id,
+          id: data.subscription?.id || data.id,
           plan: {
-            name: data.subscription_plan,
+            name: data.plan.name,
+            display_name: data.plan.display_name,
+            price: data.plan.price,
+            features: data.plan.features,
+            limits: data.plan.limits,
           },
-          status: data.subscription_status || 'active',
+          status: data.subscription?.status || 'active',
         } as any);
-        setFeatures({});
+        
+        // Set features from the plan
+        setFeatures(data.plan.features || {});
+        
+        // Set usage data
+        setUsage(data.usage || {});
       } else {
         setSubscription(null);
         setUsage({});

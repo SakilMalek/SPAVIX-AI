@@ -513,7 +513,8 @@ if __name__ == "__main__":
       curtainType?: string;
       lightingMood?: string;
       accentWall?: string;
-    }
+    },
+    finishQuality: string = 'standard'
   ): string {
     const materialDescriptions: string[] = [];
 
@@ -537,6 +538,21 @@ if __name__ == "__main__":
     const materialSection = materialDescriptions.length > 0 
       ? materialDescriptions.join(', ') 
       : 'modern finishes';
+
+    // Get finish quality modifier based on plan
+    let finishQualityModifier = '';
+    switch (finishQuality) {
+      case 'photorealistic':
+        finishQualityModifier = 'Render photorealistic, catalog-grade quality materials with perfect reflections, micro-details, grain patterns, and professional lighting. Match real estate photography standards with pristine material presentation.';
+        break;
+      case 'ultra-realistic':
+        finishQualityModifier = 'Apply ultra-realistic material finishes with detailed textures, visible grain patterns, and realistic reflections. Enhance material authenticity and visual depth.';
+        break;
+      case 'standard':
+      default:
+        finishQualityModifier = 'Use standard material finishes with basic texture detail. Focus on clean surfaces without excessive detail or reflections.';
+        break;
+    }
 
     return `DETECTED ROOM TYPE: ${detectedRoomType}
 This room is confirmed to be a ${detectedRoomType}.
@@ -647,6 +663,9 @@ OUTPUT:
 - No cropping or zooming
 - Professional interior photography quality
 - Realistic lighting, textures, shadows, and reflections
+
+MATERIAL FINISH QUALITY:
+${finishQualityModifier}
 
 STYLE APPLICATION:
 Apply a ${style} design style appropriate to the detected room type.

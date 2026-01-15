@@ -6,6 +6,7 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authMiddleware } from '../middleware/auth.js';
 import { SubscriptionService } from '../services/subscription.js';
+import { StarterPlanFeaturesService } from '../services/starterPlanFeatures.js';
 import { StripeService } from '../services/stripe.js';
 import { RazorpayService } from '../services/razorpay.js';
 import { getPaymentGateway, getLocalPricing, getCountryInfo } from '../utils/country-detection.js';

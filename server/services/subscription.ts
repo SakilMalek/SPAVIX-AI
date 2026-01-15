@@ -5,6 +5,7 @@
 
 import { Database } from '../db.js';
 import { logger } from '../utils/logger.js';
+import { PLAN_DEFINITIONS } from '../../shared/subscription-schema.js';
 import type { SubscriptionPlan, UserSubscription, UsageTracking } from '../types/database.js';
 
 export interface UserPlanInfo {
@@ -27,24 +28,27 @@ export interface UserPlanInfo {
 export class SubscriptionService {
   /**
    * Create a new subscription for a user (called on signup)
+   * Note: This is usually auto-created by database trigger, but kept for manual creation
    */
   static async createSubscription(userId: string, planName: string = 'starter'): Promise<void> {
     try {
-      // Get plan by name
+      // Get plan by name from subscription_plans table
       const planResult = await Database.query(
         'SELECT id FROM subscription_plans WHERE name = $1',
         [planName.toLowerCase()]
       );
       
       if (planResult.rows.length === 0) {
-        throw new Error(`Plan not found: ${planName}`);
+        logger.warn('Plan not found, skipping subscription creation', { userId, planName });
+        // Don't throw - the trigger will create the default subscription
+        return;
       }
       
       const planId = (planResult.rows as any[])[0].id;
 
       const now = new Date();
       const billingPeriodEnd = new Date(now);
-      billingPeriodEnd.setMonth(billingPeriodEnd.getMonth() + 1);
+      billingPeriodEnd.setFullYear(billingPeriodEnd.getFullYear() + 1); // 1 year for free plan
 
       // Use UPSERT to handle case where user already has a subscription
       await Database.query(
@@ -64,7 +68,7 @@ export class SubscriptionService {
       logger.info('Subscription created for user', { userId, plan: planName });
     } catch (error) {
       logger.error('Failed to create subscription', error as Error, { userId, planName });
-      throw error;
+      // Don't throw - let the trigger handle it
     }
   }
 
@@ -100,6 +104,10 @@ export class SubscriptionService {
       // Get current period usage
       const usage = await this.getCurrentPeriodUsage(userId, row.current_period_start, row.current_period_end);
 
+      // Use schema-defined limits as source of truth (overrides database values)
+      const planDef = Object.values(PLAN_DEFINITIONS).find(p => p.name.toLowerCase() === row.name.toLowerCase());
+      const limitsFromSchema = planDef?.limits || row.limits;
+
       return {
         plan: {
           id: row.id,
@@ -108,7 +116,7 @@ export class SubscriptionService {
           price: parseFloat(row.price),
           billing_cycle: row.billing_cycle,
           features: row.features,
-          limits: row.limits,
+          limits: limitsFromSchema,
           stripe_price_id: row.stripe_price_id,
           created_at: row.created_at,
           updated_at: row.updated_at,
@@ -127,7 +135,7 @@ export class SubscriptionService {
           updated_at: row.updated_at,
         },
         usage,
-        limits: row.limits,
+        limits: limitsFromSchema,
       };
     } catch (error) {
       logger.error('Failed to get user plan', error as Error, { userId });

@@ -125,6 +125,10 @@ VALUES (
   0.00,
   'monthly',
   '{
+    "transformations": true,
+    "standard_styles": true,
+    "basic_product_detection": true,
+    "community_support": true,
     "unlimited_transformations": false,
     "premium_styles": false,
     "high_resolution_exports": false,
@@ -146,7 +150,9 @@ VALUES (
     "max_resolution": "1024x1024"
   }'::jsonb
 )
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT (name) DO UPDATE SET
+  features = EXCLUDED.features,
+  limits = EXCLUDED.limits;
 
 -- Pro Plan ($499/month)
 INSERT INTO subscription_plans (name, display_name, price, billing_cycle, features, limits)

@@ -242,6 +242,8 @@ export const PLAN_DEFINITIONS = {
     },
     limits: {
       transformations_per_month: 5,
+      max_projects: 3,
+      transformations_per_project: 5,
       export_resolution: 'standard',
       concurrent_generations: 1,
       storage_gb: 1,
@@ -274,6 +276,8 @@ export const PLAN_DEFINITIONS = {
     },
     limits: {
       transformations_per_month: null,
+      max_projects: null,
+      transformations_per_project: null,
       export_resolution: 'high',
       concurrent_generations: 3,
       storage_gb: 50,
@@ -306,6 +310,8 @@ export const PLAN_DEFINITIONS = {
     },
     limits: {
       transformations_per_month: null,
+      max_projects: null,
+      transformations_per_project: null,
       export_resolution: 'ultra',
       concurrent_generations: 10,
       storage_gb: 500,

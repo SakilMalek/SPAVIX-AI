@@ -60,3 +60,36 @@ export const FLOOR_TYPES = [
   { id: "concrete", name: "Polished Concrete", value: "#9ca3af" },
   { id: "carpet-beige", name: "Beige Carpet", value: "#d6c0b3" },
 ];
+
+export const LIGHTING_MOODS = [
+  // Starter Plan (Free)
+  { id: "natural-daylight", name: "Natural Daylight", description: "Bright, clear natural light" },
+  { id: "warm-indoor", name: "Warm Indoor", description: "Cozy warm ambient lighting" },
+  { id: "soft-neutral", name: "Soft Neutral", description: "Balanced, soft illumination" },
+  // Pro Plan (Premium)
+  { id: "golden-hour", name: "Golden Hour", description: "Warm sunset glow", premium: true },
+  { id: "luxury-hotel", name: "Luxury Hotel Lighting", description: "Professional ambient elegance", premium: true },
+  { id: "studio-bright", name: "Studio Bright", description: "Crisp, professional clarity", premium: true },
+  // Business Plan (Premium+)
+  { id: "cozy-evening", name: "Cozy Evening Glow", description: "Intimate warm ambiance", premium: true },
+  { id: "dramatic-accent", name: "Dramatic Accent Lighting", description: "Theatrical, statement lighting", premium: true },
+];
+
+// Hidden backend modifier - not visible in UI
+export const FINISH_QUALITY = {
+  starter: {
+    level: "standard",
+    description: "Standard materials, lower texture fidelity",
+    prompt: "Use standard material finishes with basic texture detail. Focus on clean surfaces without excessive detail or reflections.",
+  },
+  pro: {
+    level: "ultra-realistic",
+    description: "Ultra-realistic materials, reflections, grain",
+    prompt: "Apply ultra-realistic material finishes with detailed textures, visible grain patterns, and realistic reflections. Enhance material authenticity and visual depth.",
+  },
+  business: {
+    level: "photorealistic",
+    description: "Photorealistic, catalog-grade",
+    prompt: "Render photorealistic, catalog-grade quality materials with perfect reflections, micro-details, grain patterns, and professional lighting. Match real estate photography standards with pristine material presentation.",
+  },
+};

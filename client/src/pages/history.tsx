@@ -39,6 +39,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link } from "wouter";
+import { useSubscription } from "@/hooks/useSubscription";
+import { addWatermarkToImage } from "@/lib/watermark";
 
 interface Transformation {
   id: string;
@@ -296,9 +299,21 @@ export default function HistoryPage() {
 
   const handleDownload = async (id: string, afterImageUrl: string) => {
     try {
-      const response = await fetch(afterImageUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const { subscription } = useSubscription();
+      const planName = subscription?.plan?.name?.toLowerCase();
+      
+      let blobToDownload: Blob;
+      
+      // Add watermark for Starter plan users
+      if (planName === 'starter') {
+        toast.info("Adding watermark to your image...");
+        blobToDownload = await addWatermarkToImage(afterImageUrl);
+      } else {
+        const response = await fetch(afterImageUrl);
+        blobToDownload = await response.blob();
+      }
+      
+      const url = window.URL.createObjectURL(blobToDownload);
       const a = document.createElement("a");
       a.href = url;
       a.download = `transformation-${id}.png`;

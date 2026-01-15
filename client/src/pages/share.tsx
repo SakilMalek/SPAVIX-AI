@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Download, Home, Loader } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { useSubscription } from "@/hooks/useSubscription";
+import { addWatermarkToImage } from "@/lib/watermark";
 import { TransformationSlider } from "@/components/dashboard/TransformationSlider";
 
 interface ShareData {
@@ -48,9 +50,21 @@ export default function SharePage() {
   const handleDownload = async () => {
     if (!share?.after_image_url) return;
     try {
-      const response = await fetch(share.after_image_url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const { subscription } = useSubscription();
+      const planName = subscription?.plan?.name?.toLowerCase();
+      
+      let blobToDownload: Blob;
+      
+      // Add watermark for Starter plan users
+      if (planName === 'starter') {
+        toast.info("Adding watermark to your image...");
+        blobToDownload = await addWatermarkToImage(share.after_image_url);
+      } else {
+        const response = await fetch(share.after_image_url);
+        blobToDownload = await response.blob();
+      }
+      
+      const url = window.URL.createObjectURL(blobToDownload);
       const a = document.createElement("a");
       a.href = url;
       a.download = `spavix-shared-${Date.now()}.png`;

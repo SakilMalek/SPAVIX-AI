@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Navbar } from "@/components/layout/Navbar";
 import { UploadPanel } from "@/components/dashboard/UploadPanel";
 import { StyleSelector } from "@/components/dashboard/StyleSelector";
 import { MaterialSelector } from "@/components/dashboard/MaterialSelector";
+import { LightingMoodSelector } from "@/components/dashboard/LightingMoodSelector";
 import { Button } from "@/components/ui/button";
 import { Wand2, ShoppingBag, Download, Share2, Sparkles, RefreshCcw, Edit3, ChevronUp, ChevronDown, Upload, Clock } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,13 +12,17 @@ import { Separator } from "@/components/ui/separator";
 import { ProductSidebar } from "@/components/dashboard/ProductSidebar";
 import { TransformationSlider } from "@/components/dashboard/TransformationSlider";
 import { ShareModal } from "@/components/ShareModal";
+import { UpgradeModal } from "@/components/dashboard/UpgradeModal";
 import { EmptyState } from "@/components/EmptyState";
 import { Link } from "wouter";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import { addWatermarkToImage } from "@/lib/watermark";
 
 const fetchProjects = async () => {
   const token = localStorage.getItem("token");
@@ -31,17 +36,193 @@ const fetchProjects = async () => {
   return response.json();
 };
 
+interface ControlsProps {
+  isMobileCollapsible?: boolean;
+  controlsScrollRef: React.RefObject<HTMLDivElement | null>;
+  selectedStyle: string;
+  setSelectedStyle: (style: string) => void;
+  wallColor: string;
+  setWallColor: (color: string) => void;
+  floorType: string;
+  setFloorType: (floor: string) => void;
+  lightingMood: string;
+  setLightingMood: (mood: string) => void;
+  selectedProjectId: string;
+  setSelectedProjectId: (id: string) => void;
+  projects: any[];
+  preventScrollDuringSelection: (callback: () => void) => void;
+  uploadedImage: string | null;
+  onFileSelect: (file: File | null) => void;
+  onGenerate: () => void;
+  isGenerating: boolean;
+  rateLimitRemaining: number | null;
+}
+
+const Controls = ({ 
+  isMobileCollapsible = false,
+  controlsScrollRef,
+  selectedStyle,
+  setSelectedStyle,
+  wallColor,
+  setWallColor,
+  floorType,
+  setFloorType,
+  lightingMood,
+  setLightingMood,
+  selectedProjectId,
+  setSelectedProjectId,
+  projects,
+  preventScrollDuringSelection,
+  uploadedImage,
+  onFileSelect,
+  onGenerate,
+  isGenerating,
+  rateLimitRemaining,
+}: ControlsProps) => (
+  <div className="flex flex-col h-full">
+    <div 
+      ref={controlsScrollRef}
+      className="p-4 md:p-6 space-y-6 flex-1 overflow-y-auto" 
+      style={{ scrollBehavior: 'auto' }}
+      onMouseDown={(e) => {
+        // Store scroll position before interaction
+        if (controlsScrollRef.current) {
+          const scrollTop = controlsScrollRef.current.scrollTop;
+          setTimeout(() => {
+            if (controlsScrollRef.current && controlsScrollRef.current.scrollTop !== scrollTop) {
+              controlsScrollRef.current.scrollTop = scrollTop;
+            }
+          }, 0);
+        }
+      }}
+    >
+      <div className="space-y-1">
+        <h1 className="text-xl md:text-2xl font-bold font-heading bg-linear-to-r from-purple-600 to-purple-400 bg-clip-text text-transparent">Design Studio</h1>
+        <p className="text-muted-foreground text-xs md:text-sm">Customize your transformation</p>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">1</div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Room Source</h3>
+          </div>
+          <Link href="/editor">
+            <Button variant="ghost" size="sm" className="h-8 text-[10px] md:text-xs gap-1.5">
+              <Edit3 className="w-3.5 h-3.5" /> Edit Mode
+            </Button>
+          </Link>
+        </div>
+        <UploadPanel onFileSelect={onFileSelect} uploadedImage={uploadedImage} />
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">2</div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Design Style</h3>
+        </div>
+        <StyleSelector value={selectedStyle} onChange={(style) => {
+          preventScrollDuringSelection(() => setSelectedStyle(style));
+        }} />
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">3</div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Project</h3>
+        </div>
+        <Select value={selectedProjectId || "none"} onValueChange={(value) => {
+          preventScrollDuringSelection(() => setSelectedProjectId(value === "none" ? "" : value));
+        }}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select a project (optional)" />
+          </SelectTrigger>
+          <SelectContent position="popper" sideOffset={5}>
+            <SelectItem value="none">No Project</SelectItem>
+            {projects.map((project: any) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">Designs will be automatically linked to the selected project</p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">4</div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customization</h3>
+        </div>
+        <MaterialSelector type="wall" label="Wall Color" value={wallColor} onChange={(color) => {
+          preventScrollDuringSelection(() => setWallColor(color));
+        }} />
+        <MaterialSelector type="floor" label="Floor Material" value={floorType} onChange={(floor) => {
+          preventScrollDuringSelection(() => setFloorType(floor));
+        }} />
+        <LightingMoodSelector value={lightingMood} onChange={(mood) => {
+          preventScrollDuringSelection(() => setLightingMood(mood));
+        }} />
+      </div>
+    </div>
+
+    {!isMobileCollapsible && (
+      <div className="p-4 md:p-6 border-t bg-card/50 backdrop-blur-sm shrink-0">
+        <Button 
+          size="lg" 
+          className="w-full h-12 font-semibold rounded-full bg-linear-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-50" 
+          onClick={onGenerate}
+          disabled={isGenerating || !uploadedImage || rateLimitRemaining !== null}
+        >
+          {isGenerating ? (
+            <><Sparkles className="mr-2 h-4 w-4 animate-spin" /> Designing...</>
+          ) : rateLimitRemaining !== null ? (
+            <><Clock className="mr-2 h-4 w-4" /> Rate Limited ({Math.ceil(rateLimitRemaining / 60)}m)</>
+          ) : (
+            <><Wand2 className="mr-2 h-4 w-4" /> Generate Transformation</>
+          )}
+        </Button>
+      </div>
+    )}
+  </div>
+);
+
 export default function DashboardPage() {
   const isMobile = useIsMobile();
+  const { subscription } = useSubscription();
+  const planName = subscription?.plan?.name?.toLowerCase();
+  const controlsScrollRef = useRef<HTMLDivElement>(null);
+  const pageScrollRef = useRef<number>(0);
   const [selectedStyle, setSelectedStyle] = useState("modern");
   const [wallColor, setWallColor] = useState("white");
   const [floorType, setFloorType] = useState("wood-oak");
+  const [lightingMood, setLightingMood] = useState("natural-daylight");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [rateLimitUntil, setRateLimitUntil] = useState<number | null>(null);
   const [isProductSidebarOpen, setIsProductSidebarOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [upgradeModalData, setUpgradeModalData] = useState<{
+    currentUsage?: number;
+    limit?: number;
+  }>({});
+
+  // Prevent page scroll during selections
+  const preventScrollDuringSelection = (callback: () => void) => {
+    pageScrollRef.current = window.scrollY;
+    callback();
+    setTimeout(() => {
+      window.scrollTo(0, pageScrollRef.current);
+    }, 0);
+  };
 
   // Calculate remaining time for rate limit
   const getRateLimitRemainingTime = () => {
@@ -71,6 +252,38 @@ export default function DashboardPage() {
     queryKey: ["projects"],
     queryFn: fetchProjects,
   });
+
+  // Check if selected project has reached transformation limit
+  const checkProjectTransformationLimit = async (projectId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl(`/api/generations/project/${projectId}`), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) return null;
+      
+      const transformations = await response.json();
+      const { subscription } = useSubscription();
+      const transformationsPerProject = subscription?.plan?.limits?.transformations_per_project;
+      
+      if (transformationsPerProject && transformations.length >= transformationsPerProject) {
+        return {
+          isAtLimit: true,
+          current: transformations.length,
+          limit: transformationsPerProject,
+        };
+      }
+      
+      return { isAtLimit: false };
+    } catch (error) {
+      console.error('Error checking project transformation limit:', error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     const editedImage = localStorage.getItem("editedImage");
@@ -122,10 +335,8 @@ export default function DashboardPage() {
     }
     
     try {
-      const token = localStorage.getItem('token');
-      console.log('Sending generation request with token:', !!token);
+      console.log('Sending generation request with token:', !!localStorage.getItem('token'));
       
-      const { getApiUrl } = await import("@/config/api");
       const requestBody: any = {
         imageUrl: uploadedImage,
         roomType: 'living-room',
@@ -134,7 +345,7 @@ export default function DashboardPage() {
           wallColor: wallColor,
           floorType: floorType,
           curtainType: 'none',
-          lightingMood: 'natural',
+          lightingMood: lightingMood,
           accentWall: 'none',
         },
       };
@@ -144,14 +355,7 @@ export default function DashboardPage() {
         requestBody.projectId = selectedProjectId;
       }
       
-      const response = await fetch(getApiUrl('/api/generations'), {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const response = await apiClient.post('/api/generations', requestBody);
 
       console.log('Response status:', response.status);
       const contentType = response.headers.get('content-type');
@@ -163,10 +367,26 @@ export default function DashboardPage() {
         
         let errorMessage = text ? text : `Generation failed: ${response.status}`;
         
-        // Handle rate limit error specifically
+        // Handle monthly transformation limit error (429 USAGE_LIMIT_EXCEEDED)
         if (response.status === 429) {
           try {
             const errorData = JSON.parse(text);
+            
+            // Check if it's a usage limit error (monthly transformation limit)
+            if (errorData.code === 'USAGE_LIMIT_EXCEEDED') {
+              const currentUsage = errorData.usage?.transformations || 0;
+              const limit = errorData.limits?.transformations_per_month || 5;
+              
+              setUpgradeModalData({
+                currentUsage,
+                limit,
+              });
+              setIsUpgradeModalOpen(true);
+              setIsGenerating(false);
+              return;
+            }
+            
+            // Otherwise it's a rate limit error
             const retryAfter = errorData.retryAfter || 600;
             const minutes = Math.ceil(retryAfter / 60);
             errorMessage = `Rate limit exceeded. Please wait ${minutes} minute(s) before trying again.`;
@@ -175,6 +395,25 @@ export default function DashboardPage() {
           } catch {
             errorMessage = "Rate limit exceeded. Please wait a few minutes before trying again.";
             setRateLimitUntil(Date.now() + (10 * 60 * 1000)); // Default 10 minutes
+          }
+        }
+        
+        // Handle transformation limit error per project
+        if (response.status === 403) {
+          try {
+            const errorData = JSON.parse(text);
+            if (errorData.error?.includes('Transformation limit')) {
+              // Show upgrade modal for per-project limit
+              setUpgradeModalData({
+                currentUsage: errorData.current,
+                limit: errorData.limit,
+              });
+              setIsUpgradeModalOpen(true);
+              setIsGenerating(false);
+              return;
+            }
+          } catch {
+            // Keep the default error message
           }
         }
         
@@ -201,113 +440,38 @@ export default function DashboardPage() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!generatedImage) {
       toast.error("No image to export");
       return;
     }
-    const link = document.createElement("a");
-    link.href = generatedImage;
-    link.download = `spavix-transformation-${Date.now()}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Image downloaded!");
+
+    try {
+      let blobToDownload: Blob;
+      
+      // Add watermark for Starter plan users
+      if (planName === 'starter') {
+        toast.info("Adding watermark to your image...");
+        blobToDownload = await addWatermarkToImage(generatedImage);
+      } else {
+        const response = await fetch(generatedImage);
+        blobToDownload = await response.blob();
+      }
+      
+      const url = window.URL.createObjectURL(blobToDownload);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `spavix-transformation-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      toast.success("Image downloaded!");
+    } catch (error) {
+      console.error("Error exporting image:", error);
+      toast.error("Failed to download image");
+    }
   };
-
-  const Controls = ({ isMobileCollapsible = false }: { isMobileCollapsible?: boolean }) => (
-    <div className="flex flex-col h-full">
-      <div className="p-4 md:p-6 space-y-6 flex-1 overflow-y-auto">
-        <div className="space-y-1">
-          <h1 className="text-xl md:text-2xl font-bold font-heading">Design Studio</h1>
-          <p className="text-muted-foreground text-xs md:text-sm">Customize your transformation</p>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">1</div>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Room Source</h3>
-            </div>
-            <Link href="/editor">
-              <Button variant="ghost" size="sm" className="h-8 text-[10px] md:text-xs gap-1.5">
-                <Edit3 className="w-3.5 h-3.5" /> Edit Mode
-              </Button>
-            </Link>
-          </div>
-          <UploadPanel onFileSelect={handleFileUpload} uploadedImage={uploadedImage} />
-        </div>
-
-        <Separator />
-
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">2</div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Design Style</h3>
-          </div>
-          <StyleSelector value={selectedStyle} onChange={setSelectedStyle} />
-        </div>
-
-        <Separator />
-
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">3</div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Project</h3>
-          </div>
-          <Select value={selectedProjectId || "none"} onValueChange={(value) => {
-            setSelectedProjectId(value === "none" ? "" : value);
-            // Prevent scroll jump by maintaining scroll position
-            const scrollPos = window.scrollY;
-            setTimeout(() => window.scrollTo(0, scrollPos), 0);
-          }}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a project (optional)" />
-            </SelectTrigger>
-            <SelectContent position="popper" sideOffset={5}>
-              <SelectItem value="none">No Project</SelectItem>
-              {projects.map((project: any) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-[10px] text-muted-foreground">Designs will be automatically linked to the selected project</p>
-        </div>
-
-        <Separator />
-
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">4</div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customization</h3>
-          </div>
-          <MaterialSelector type="wall" label="Wall Color" value={wallColor} onChange={setWallColor} />
-          <MaterialSelector type="floor" label="Floor Material" value={floorType} onChange={setFloorType} />
-        </div>
-      </div>
-
-      {!isMobileCollapsible && (
-        <div className="p-4 md:p-6 border-t bg-card/50 backdrop-blur-sm shrink-0">
-          <Button 
-            size="lg" 
-            className="w-full h-12 font-semibold rounded-full bg-linear-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all disabled:opacity-50" 
-            onClick={handleGenerate} 
-            disabled={isGenerating || !uploadedImage || getRateLimitRemainingTime() !== null}
-          >
-            {isGenerating ? (
-              <><Sparkles className="mr-2 h-4 w-4 animate-spin" /> Designing...</>
-            ) : getRateLimitRemainingTime() !== null ? (
-              <><Clock className="mr-2 h-4 w-4" /> Rate Limited ({Math.ceil(getRateLimitRemainingTime()! / 60)}m)</>
-            ) : (
-              <><Wand2 className="mr-2 h-4 w-4" /> Generate Transformation</>
-            )}
-          </Button>
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
@@ -367,9 +531,9 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <EmptyState
-                    icon={<Upload className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />}
-                    title="Design Your Space"
-                    description="Upload a photo of your room to get started with AI-powered design transformations"
+                    icon={<Upload className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />}
+                    title="Design Your Dream Space"
+                    description="Upload a photo of your room, choose a style, and let our AI reimagine your space in seconds."
                   />
                 )}
              </div>
@@ -399,7 +563,27 @@ export default function DashboardPage() {
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-2">
                     <ScrollArea className="h-[35vh] rounded-lg">
-                      <Controls isMobileCollapsible={true} />
+                      <Controls 
+                        isMobileCollapsible={true}
+                        controlsScrollRef={controlsScrollRef}
+                        selectedStyle={selectedStyle}
+                        setSelectedStyle={setSelectedStyle}
+                        wallColor={wallColor}
+                        setWallColor={setWallColor}
+                        floorType={floorType}
+                        setFloorType={setFloorType}
+                        lightingMood={lightingMood}
+                        setLightingMood={setLightingMood}
+                        selectedProjectId={selectedProjectId}
+                        setSelectedProjectId={setSelectedProjectId}
+                        projects={projects}
+                        preventScrollDuringSelection={preventScrollDuringSelection}
+                        uploadedImage={uploadedImage}
+                        onFileSelect={handleFileUpload}
+                        onGenerate={handleGenerate}
+                        isGenerating={isGenerating}
+                        rateLimitRemaining={getRateLimitRemainingTime()}
+                      />
                     </ScrollArea>
                   </CollapsibleContent>
                 </Collapsible>
@@ -408,7 +592,27 @@ export default function DashboardPage() {
         ) : (
           <ResizablePanelGroup direction="horizontal" className="h-full rounded-none border-t">
             <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="bg-card border-r z-10 shadow-lg flex flex-col">
-              <Controls isMobileCollapsible={false} />
+              <Controls 
+                isMobileCollapsible={false}
+                controlsScrollRef={controlsScrollRef}
+                selectedStyle={selectedStyle}
+                setSelectedStyle={setSelectedStyle}
+                wallColor={wallColor}
+                setWallColor={setWallColor}
+                floorType={floorType}
+                setFloorType={setFloorType}
+                lightingMood={lightingMood}
+                setLightingMood={setLightingMood}
+                selectedProjectId={selectedProjectId}
+                setSelectedProjectId={setSelectedProjectId}
+                projects={projects}
+                preventScrollDuringSelection={preventScrollDuringSelection}
+                uploadedImage={uploadedImage}
+                onFileSelect={handleFileUpload}
+                onGenerate={handleGenerate}
+                isGenerating={isGenerating}
+                rateLimitRemaining={getRateLimitRemainingTime()}
+              />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={75} className="relative bg-muted/20">
@@ -463,6 +667,17 @@ export default function DashboardPage() {
         {isProductSidebarOpen && <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-55 transition-opacity" onClick={() => setIsProductSidebarOpen(false)} />}
         
         <ShareModal open={isShareModalOpen} onOpenChange={setIsShareModalOpen} imageUrl={generatedImage || undefined} />
+        
+        <UpgradeModal 
+          open={isUpgradeModalOpen} 
+          onOpenChange={setIsUpgradeModalOpen}
+          title="Monthly Limit Reached"
+          description="You've reached your monthly transformation limit"
+          message="Upgrade to Pro plan for unlimited transformations and more features."
+          feature="transformations"
+          currentUsage={upgradeModalData.currentUsage}
+          limit={upgradeModalData.limit}
+        />
       </main>
     </div>
   );

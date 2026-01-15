@@ -1,35 +1,22 @@
 import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { 
-  Plus, 
-  Search, 
-  Send, 
-  Bot, 
-  MoreVertical,
-  History as HistoryIcon,
-  Menu,
-  ChevronLeft,
-  Loader,
-  Trash2,
-  Edit2,
-  X,
-  RefreshCw
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { TransformationSlider } from "@/components/dashboard/TransformationSlider";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useSubscription } from "@/context/SubscriptionContext";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -38,10 +25,28 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { 
+  Plus, 
+  Menu, 
+  Bot, 
+  Send, 
+  Loader, 
+  MoreVertical, 
+  Edit2, 
+  Trash2, 
+  ChevronLeft, 
+  RefreshCw, 
+  X, 
+  HistoryIcon, 
+  Lock,
+  Search
+} from "lucide-react";
 import { toast } from "sonner";
-import { TransformationSlider } from "@/components/dashboard/TransformationSlider";
 import { debounce } from "@/utils/debounce";
 
 interface Project {
@@ -93,7 +98,10 @@ const ProjectListComponent = memo(({
   isLoading,
   handleOpenCreateDialog,
   handleProjectSelect,
-}: ProjectListProps) => (
+  projectsCount,
+  maxProjects,
+  isAtLimit,
+}: ProjectListProps & { projectsCount?: number; maxProjects?: number | null; isAtLimit?: boolean }) => (
   <div className="h-full flex flex-col bg-card">
     <div className="p-4 border-b space-y-4">
       <div className="flex items-center justify-between">
@@ -103,6 +111,8 @@ const ProjectListComponent = memo(({
           variant="ghost" 
           className="rounded-full h-8 w-8"
           onClick={handleOpenCreateDialog}
+          disabled={isAtLimit}
+          title={isAtLimit ? "Project limit reached" : ""}
         >
           <Plus className="w-4 h-4" />
         </Button>
@@ -173,6 +183,17 @@ const ProjectListComponent = memo(({
         </div>
       )}
     </ScrollArea>
+    {maxProjects && (
+      <div className="p-3 border-t bg-muted/30 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">Projects</span>
+          <span className="font-semibold">{projectsCount || 0}/{maxProjects}</span>
+        </div>
+        {isAtLimit && (
+          <p className="text-[10px] text-amber-600 mt-1">Limit reached. Upgrade to Pro for unlimited projects.</p>
+        )}
+      </div>
+    )}
   </div>
 ));
 
@@ -196,62 +217,81 @@ const ChatInterfaceComponent = memo(({
   handleSendChatMessage,
   isMobile,
   handleCloseChat,
-}: ChatInterfaceProps) => (
-  <div className="h-full flex flex-col bg-card border-l">
-    <div className="p-3 border-b flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <Bot className="w-4 h-4 text-primary" />
-        <span className="font-bold text-xs">Project Assistant</span>
+}: ChatInterfaceProps) => {
+  const { subscription } = useSubscription();
+  const isStarterPlan = subscription?.plan?.name === "starter";
+  
+  return (
+    <div className="h-full flex flex-col bg-card border-l">
+      <div className="p-3 border-b flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Bot className="w-4 h-4 text-primary" />
+          <span className="font-bold text-xs">Project Assistant</span>
+          {isStarterPlan && <Lock className="w-3 h-3 text-amber-600" />}
+        </div>
+        {isMobile && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCloseChat}><ChevronLeft className="w-4 h-4" /></Button>}
       </div>
-      {isMobile && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCloseChat}><ChevronLeft className="w-4 h-4" /></Button>}
-    </div>
-    <ScrollArea className="flex-1 p-4">
-      <div className="space-y-4 text-xs">
-        {chatMessages.map((msg, i) => (
-          <div key={i} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-            <div className={`p-2.5 rounded-xl max-w-[85%] ${msg.role === "bot" ? "bg-muted" : "bg-primary text-primary-foreground"}`}>
-              {msg.content}
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-4 text-xs">
+          {isStarterPlan && (
+            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px]">
+              <p className="font-semibold mb-1">🔒 AI Chat Locked</p>
+              <p>Upgrade to Pro or Business plan to use the AI Project Assistant.</p>
             </div>
-          </div>
-        ))}
-        {isSendingMessage && (
-          <div className="flex gap-2">
-            <div className="p-2.5 rounded-xl bg-muted flex items-center gap-1">
-              <span className="animate-pulse">●</span>
-              <span className="animate-pulse">●</span>
-              <span className="animate-pulse">●</span>
+          )}
+          {chatMessages.map((msg, i) => (
+            <div key={i} className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+              <div className={`p-2.5 rounded-xl max-w-[85%] ${msg.role === "bot" ? "bg-muted" : "bg-primary text-primary-foreground"}`}>
+                {msg.content}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </ScrollArea>
-    <div className="p-3 border-t">
-      <div className="relative flex gap-2">
-        <Input 
-          placeholder="Ask advice..." 
-          className="h-9 text-xs rounded-lg" 
-          value={chatMessage} 
-          onChange={(e) => setChatMessage(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === "Enter" && !isSendingMessage) {
-              handleSendChatMessage();
-            }
-          }}
-          disabled={isSendingMessage}
-          autoComplete="off"
-        />
-        <Button 
-          size="icon" 
-          className="h-9 w-9 shrink-0" 
-          disabled={!chatMessage.trim() || isSendingMessage}
-          onClick={handleSendChatMessage}
-        >
-          {isSendingMessage ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-        </Button>
+          ))}
+          {isSendingMessage && (
+            <div className="flex gap-2">
+              <div className="p-2.5 rounded-xl bg-muted flex items-center gap-1">
+                <span className="animate-pulse">●</span>
+                <span className="animate-pulse">●</span>
+                <span className="animate-pulse">●</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+      <div className="p-3 border-t">
+        <div className="relative flex gap-2">
+          <Input 
+            placeholder={isStarterPlan ? "AI Chat locked for Starter plan" : "Ask advice..."} 
+            className="h-9 text-xs rounded-lg" 
+            value={chatMessage} 
+            onChange={(e) => !isStarterPlan && setChatMessage(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter" && !isSendingMessage && !isStarterPlan) {
+                handleSendChatMessage();
+              }
+            }}
+            disabled={isSendingMessage || isStarterPlan}
+            autoComplete="off"
+          />
+          <Button 
+            size="icon" 
+            className="h-9 w-9 shrink-0" 
+            disabled={!chatMessage.trim() || isSendingMessage || isStarterPlan}
+            onClick={handleSendChatMessage}
+            title={isStarterPlan ? "Upgrade to Pro or Business plan to use AI Chat" : "Send message"}
+          >
+            {isSendingMessage ? (
+              <Loader className="w-3.5 h-3.5 animate-spin" />
+            ) : isStarterPlan ? (
+              <Lock className="w-3.5 h-3.5" />
+            ) : (
+              <Send className="w-3.5 h-3.5" />
+            )}
+          </Button>
+        </div>
       </div>
     </div>
-  </div>
-));
+  );
+});
 
 ChatInterfaceComponent.displayName = "ChatInterface";
 
@@ -323,9 +363,18 @@ export default function ProjectsPage() {
     [projects, debouncedSearchQuery]
   );
 
+  const { subscription } = useSubscription();
+  const maxProjects = subscription?.plan?.limits?.max_projects;
+
   const handleCreateProject = useCallback(async () => {
     if (!newProjectName.trim()) {
       toast.error("Project name is required");
+      return;
+    }
+
+    // Check project limit
+    if (maxProjects && projects.length >= maxProjects) {
+      toast.error(`Project limit reached (${maxProjects}). Upgrade to Pro for unlimited projects.`);
       return;
     }
 
@@ -363,7 +412,7 @@ export default function ProjectsPage() {
     } finally {
       setIsCreating(false);
     }
-  }, [newProjectName, newProjectDescription, queryClient]);
+  }, [newProjectName, newProjectDescription, queryClient, projects.length, maxProjects]);
 
   const handleDeleteProject = useCallback(async (projectId: string) => {
     if (!confirm("Are you sure you want to delete this project?")) return;
@@ -560,15 +609,24 @@ export default function ProjectsPage() {
         {/* Desktop Project List */}
         {!isMobile && (
           <div className="w-64 shrink-0">
-            <ProjectListComponent
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              filteredProjects={filteredProjects}
-              selectedProjectId={selectedProjectId}
-              isLoading={isLoading}
-              handleOpenCreateDialog={handleOpenCreateDialog}
-              handleProjectSelect={handleProjectSelect}
-            />
+            {(() => {
+              const { subscription } = useSubscription();
+              const maxProjects = subscription?.plan?.limits?.max_projects;
+              return (
+                <ProjectListComponent
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  filteredProjects={filteredProjects}
+                  selectedProjectId={selectedProjectId}
+                  isLoading={isLoading}
+                  handleOpenCreateDialog={handleOpenCreateDialog}
+                  handleProjectSelect={handleProjectSelect}
+                  projectsCount={projects.length}
+                  maxProjects={maxProjects || null}
+                  isAtLimit={maxProjects ? projects.length >= maxProjects : false}
+                />
+              );
+            })()}
           </div>
         )}
 
@@ -580,15 +638,24 @@ export default function ProjectsPage() {
                 <Sheet open={isProjectListOpen} onOpenChange={setIsProjectListOpen}>
                   <SheetTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><Menu className="w-4 h-4" /></Button></SheetTrigger>
                   <SheetContent side="left" className="p-0 w-80 sm:w-96">
-                    <ProjectListComponent
-                      searchQuery={searchQuery}
-                      setSearchQuery={setSearchQuery}
-                      filteredProjects={filteredProjects}
-                      selectedProjectId={selectedProjectId}
-                      isLoading={isLoading}
-                      handleOpenCreateDialog={handleOpenCreateDialog}
-                      handleProjectSelect={handleProjectSelect}
-                    />
+                    {(() => {
+                      const { subscription } = useSubscription();
+                      const maxProjects = subscription?.plan?.limits?.max_projects;
+                      return (
+                        <ProjectListComponent
+                          searchQuery={searchQuery}
+                          setSearchQuery={setSearchQuery}
+                          filteredProjects={filteredProjects}
+                          selectedProjectId={selectedProjectId}
+                          isLoading={isLoading}
+                          handleOpenCreateDialog={handleOpenCreateDialog}
+                          handleProjectSelect={handleProjectSelect}
+                          projectsCount={projects.length}
+                          maxProjects={maxProjects || null}
+                          isAtLimit={maxProjects ? projects.length >= maxProjects : false}
+                        />
+                      );
+                    })()}
                   </SheetContent>
                 </Sheet>
               )}

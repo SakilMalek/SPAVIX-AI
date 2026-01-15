@@ -17,7 +17,7 @@ async function initializePlans() {
           community_support: true,
         },
         limits: {
-          transformations_per_month: 5,
+          transformations_per_month: 8,
           storage_gb: 1,
           concurrent_generations: 1,
         },

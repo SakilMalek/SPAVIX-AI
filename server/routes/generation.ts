@@ -4,6 +4,7 @@ import { ShoppingListService } from '../services/shopping';
 import { Database } from '../db';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { checkUsageLimit, trackUsage } from '../middleware/subscription';
+import { SubscriptionService } from '../services/subscription.js';
 import { generateSecureShareId } from '../utils/shareId';
 import { logger } from '../utils/logger';
 import { Errors, asyncHandler } from '../middleware/errorHandler.js';
@@ -39,17 +40,65 @@ generationRoutes.post('/', authMiddleware, checkUsageLimit('transformation'), tr
       return;
     }
 
-    // Validate projectId if provided
+    // Validate projectId if provided and check transformation limit
     if (projectId) {
       const project = await Database.getProjectById(projectId, req.user.id);
       if (!project) {
         res.status(404).json({ error: 'Project not found or does not belong to user' });
         return;
       }
+      
+      // Check transformation limit per project for Starter plan
+      try {
+        const planInfo = await SubscriptionService.getUserPlan(req.user.id);
+        if (planInfo) {
+          const transformationsPerProject = planInfo.plan.limits?.transformations_per_project;
+          if (transformationsPerProject) {
+            // Get current transformation count for this project
+            const projectGenerations = await Database.query(
+              `SELECT COUNT(*) as count FROM generations WHERE project_id = $1 AND user_id = $2`,
+              [projectId, req.user.id]
+            );
+            const currentCount = projectGenerations.rows[0]?.count || 0;
+            
+            if (currentCount >= transformationsPerProject) {
+              res.status(403).json({ 
+                error: 'Transformation limit reached for this project',
+                limit: transformationsPerProject,
+                current: currentCount,
+                planName: planInfo.plan.name
+              });
+              return;
+            }
+          }
+        }
+      } catch (error: any) {
+        console.warn('⚠️ Failed to check transformation limit:', error.message);
+      }
+      
       console.log('Generating image for project:', projectId);
     }
 
     console.log('Generating image with prompt for:', { roomType, style, projectId });
+
+    // Get user's subscription plan for finish quality modifier
+    let finishQuality = 'standard'; // Default to Starter level
+    try {
+      const planInfo = await SubscriptionService.getUserPlan(req.user.id);
+      if (planInfo) {
+        const planName = planInfo.plan.name.toLowerCase();
+        if (planName === 'business') {
+          finishQuality = 'photorealistic';
+        } else if (planName === 'pro') {
+          finishQuality = 'ultra-realistic';
+        } else {
+          finishQuality = 'standard';
+        }
+        console.log(`📊 User plan: ${planName}, Finish quality: ${finishQuality}`);
+      }
+    } catch (error: any) {
+      console.warn('⚠️ Failed to get user plan, using default finish quality');
+    }
 
     // Stage 1: Detect room type from image
     console.log('🔍 Stage 1: Detecting room type...');
@@ -63,7 +112,7 @@ generationRoutes.post('/', authMiddleware, checkUsageLimit('transformation'), tr
     }
 
     // Stage 2: Build prompt with detected room type and generate image
-    const prompt = GeminiImageService.buildPrompt(detectedRoomType, style, materials);
+    const prompt = GeminiImageService.buildPrompt(detectedRoomType, style, materials, finishQuality);
     console.log('Generated prompt length:', prompt.length);
 
     console.log('🎨 Stage 2: Calling Gemini 2.5 Flash Image (img2img) for transformation...');
@@ -78,28 +127,39 @@ generationRoutes.post('/', authMiddleware, checkUsageLimit('transformation'), tr
 
     const afterImageUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
 
-    const generation = await Database.saveGeneration(
-      req.user.id,
-      imageUrl,
-      afterImageUrl,
-      style,
-      materials,
-      roomType,
-      projectId
-    );
+    let generation;
+    try {
+      generation = await Database.saveGeneration(
+        req.user.id,
+        imageUrl,
+        afterImageUrl,
+        style,
+        materials,
+        roomType,
+        projectId
+      );
+    } catch (dbError: any) {
+      console.error('❌ Failed to save generation:', dbError.message);
+      throw new Error(`Failed to save generation: ${dbError.message}`);
+    }
 
     // Save initial transformation history (version 1)
-    await Database.saveTransformationHistory(
-      generation.id,
-      req.user.id,
-      1,
-      imageUrl,
-      afterImageUrl,
-      style,
-      materials,
-      roomType,
-      'completed'
-    );
+    try {
+      await Database.saveTransformationHistory(
+        generation.id,
+        req.user.id,
+        1,
+        imageUrl,
+        afterImageUrl,
+        style,
+        materials,
+        roomType,
+        'completed'
+      );
+    } catch (historyError: any) {
+      console.error('❌ Failed to save transformation history:', historyError.message);
+      throw new Error(`Failed to save transformation history: ${historyError.message}`);
+    }
 
     logger.info('Generation created with history', { generationId: generation.id, userId: req.user.id, projectId });
 

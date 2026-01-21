@@ -33,8 +33,11 @@ const allowlist = [
 ];
 
 async function buildAll() {
-  // Step 1: Setup Python dependencies (skip on Windows)
-  if (process.platform !== "win32") {
+  // Step 1: Setup Python dependencies (skip on Windows and Vercel)
+  const isVercel = process.env.VERCEL === "1";
+  const isWindows = process.platform === "win32";
+  
+  if (!isWindows && !isVercel) {
     console.log("\n========================================");
     console.log("Step 1: Setting up Python dependencies...");
     console.log("========================================\n");
@@ -44,6 +47,10 @@ async function buildAll() {
       console.error("Python setup failed:", err);
       process.exit(1);
     }
+  } else if (isVercel) {
+    console.log("\n========================================");
+    console.log("Step 1: Skipping Python setup (Vercel environment)");
+    console.log("========================================\n");
   }
 
   // Step 2: Build Node application

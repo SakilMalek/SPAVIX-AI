@@ -8,12 +8,9 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 const fetchAnalytics = async () => {
-  const token = localStorage.getItem("token");
   const { getApiUrl } = await import("@/config/api");
   const response = await fetch(getApiUrl("/api/analytics"), {
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
+    credentials: 'include',
   });
   if (!response.ok) throw new Error("Failed to fetch analytics");
   return response.json();

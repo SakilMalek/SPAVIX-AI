@@ -29,14 +29,13 @@ export default function ForgotPasswordPage() {
 
     setIsLoading(true);
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       
       const response = await fetch(getApiUrl("/api/auth/forgot-password"), {
         method: "POST",
+        credentials: 'include',
         headers: {
           "Content-Type": "application/json",
-          ...(token && { "Authorization": `Bearer ${token}` }),
         },
         body: JSON.stringify({ email }),
       });

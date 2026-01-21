@@ -16,12 +16,6 @@ export default function PaymentSuccessPage() {
   useEffect(() => {
     const handlePaymentSuccess = async () => {
       try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          setLocation("/login");
-          return;
-        }
-
         // Get payment link ID from session storage
         const paymentLinkId = sessionStorage.getItem("razorpay_payment_link_id");
         const planNameStored = sessionStorage.getItem("razorpay_plan_name");
@@ -31,9 +25,9 @@ export default function PaymentSuccessPage() {
         // Verify payment success on backend
         const response = await fetch("/api/subscription/payment-success", {
           method: "POST",
+          credentials: 'include',
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
           },
           body: JSON.stringify({
             paymentLinkId: paymentLinkId || undefined,

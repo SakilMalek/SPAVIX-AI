@@ -66,12 +66,6 @@ export default function PricingPage() {
     try {
       setCheckoutLoading(planName);
 
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setLocation("/login");
-        return;
-      }
-
       const countryCode = pricingData?.country?.code || "IN";
       const successUrl = `${window.location.origin}/razorpay-redirect`;
       const cancelUrl = `${window.location.origin}/pricing?upgrade=cancelled`;
@@ -87,9 +81,9 @@ export default function PricingPage() {
 
       const response = await fetch("/api/subscription/checkout", {
         method: "POST",
+        credentials: 'include',
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify(requestBody),
       });

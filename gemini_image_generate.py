@@ -85,7 +85,7 @@ def generate_image(prompt: str, input_image_path: str, output_path: str):
         print(f"⏳ Generating transformed image...", file=sys.stderr)
         
         # Use gemini-3-pro-image for image generation
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent?key={api_key}"
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key={api_key}"
         
         headers = {
             "Content-Type": "application/json"

@@ -65,13 +65,10 @@ export default function ProfilePage() {
 
   const fetchUsageData = async () => {
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       
       const response = await fetch(getApiUrl("/api/auth/usage"), {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -110,14 +107,13 @@ export default function ProfilePage() {
 
     setIsSaving(true);
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl("/api/auth/update-profile"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ name: username }),
       });
 
@@ -139,15 +135,14 @@ export default function ProfilePage() {
 
   const handleAvatarChange = async (avatarId: string) => {
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       
       const response = await fetch(getApiUrl("/api/auth/profile"), {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ profilePicture: avatarId }),
       });
 
@@ -186,15 +181,14 @@ export default function ProfilePage() {
 
     setIsChangingPassword(true);
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       
       const response = await fetch(getApiUrl("/api/auth/change-password"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           currentPassword,
           newPassword,
@@ -238,15 +232,14 @@ export default function ProfilePage() {
       reader.onload = async (event) => {
         const base64String = event.target?.result as string;
 
-        const token = localStorage.getItem("token");
         const { getApiUrl } = await import("@/config/api");
 
         const response = await fetch(getApiUrl("/api/auth/upload-picture"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
           },
+          credentials: 'include',
           body: JSON.stringify({ file: base64String }),
         });
 
@@ -293,15 +286,14 @@ export default function ProfilePage() {
   const handleUpgradePlan = async (planName: string) => {
     setUpgradingPlan(planName);
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
 
       const response = await fetch(getApiUrl("/api/subscriptions/change-plan"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({ planName }),
       });
 

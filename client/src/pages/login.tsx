@@ -99,6 +99,7 @@ export default function LoginPage() {
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password, rememberMe }),
       });
 
@@ -124,6 +125,7 @@ export default function LoginPage() {
       console.log('✅ Login successful, tokens set in HTTP-only cookies');
       console.log('📦 Response data:', data);
       
+      // Tokens are in HTTP-only cookies, no need to store in localStorage
       console.log('🔄 Calling refreshAuth()...');
       toast.success("Logged in successfully!");
       try {

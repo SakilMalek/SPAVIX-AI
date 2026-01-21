@@ -41,13 +41,12 @@ authRoutes.post('/signup', signupLimiter.middleware(), asyncHandler(async (req: 
   const user = await Database.createUser(email, passwordHash, undefined, profilePicture);
 
   // Create subscription for new user (defaults to Starter plan)
-  try {
-    await SubscriptionService.createSubscription(user.id, 'starter');
-    logger.info('Subscription created for new user', { userId: user.id, plan: 'starter' });
-  } catch (error) {
-    logger.error('Failed to create subscription for new user', error instanceof Error ? error : new Error(String(error)), { userId: user.id });
-    // Don't fail signup if subscription creation fails
-  }
+  // Defer to background to avoid blocking signup
+  setImmediate(() => {
+    SubscriptionService.createSubscription(user.id, 'starter')
+      .then(() => logger.info('Subscription created for new user', { userId: user.id, plan: 'starter' }))
+      .catch((error) => logger.error('Failed to create subscription for new user', error instanceof Error ? error : new Error(String(error)), { userId: user.id }));
+  });
 
   // Generate token pair with refresh token
   const tokenPair = TokenManager.generateTokenPair(user.id, email, rememberMe);
@@ -72,9 +71,25 @@ authRoutes.post('/signup', signupLimiter.middleware(), asyncHandler(async (req: 
 
   logger.logAuth('User signup successful', user.id, { email, rememberMe });
 
+  // Set tokens as HTTP-only cookies
+  const isProduction = process.env.NODE_ENV === 'production';
+  const sameSiteValue: 'strict' | 'lax' = isProduction ? 'strict' : 'lax';
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: sameSiteValue, // Use 'lax' in dev for easier testing
+    maxAge: 15 * 60 * 1000, // 15 minutes
+    path: '/',
+  };
+  
+  res.cookie('accessToken', tokenPair.accessToken, cookieOptions);
+  res.cookie('refreshToken', tokenPair.refreshToken, {
+    ...cookieOptions,
+    maxAge: (7 * 24 * 60 * 60 * 1000), // 7 days
+  });
+
   res.json({
-    accessToken: tokenPair.accessToken,
-    refreshToken: tokenPair.refreshToken,
+    success: true,
     expiresIn: 15 * 60, // 15 minutes in seconds
     user: { id: user.id, email, picture: savedUser?.picture || profilePicture }
   });
@@ -120,9 +135,25 @@ authRoutes.post('/login', loginLimiter.middleware(), asyncHandler(async (req: Au
 
   logger.logAuth('User login successful', user.id, { email, rememberMe });
 
+  // Set tokens as HTTP-only cookies
+  const isProduction = process.env.NODE_ENV === 'production';
+  const sameSiteValue: 'strict' | 'lax' = isProduction ? 'strict' : 'lax';
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: sameSiteValue, // Use 'lax' in dev for easier testing
+    maxAge: 15 * 60 * 1000, // 15 minutes
+    path: '/',
+  };
+  
+  res.cookie('accessToken', tokenPair.accessToken, cookieOptions);
+  res.cookie('refreshToken', tokenPair.refreshToken, {
+    ...cookieOptions,
+    maxAge: (7 * 24 * 60 * 60 * 1000), // 7 days
+  });
+
   res.json({
-    accessToken: tokenPair.accessToken,
-    refreshToken: tokenPair.refreshToken,
+    success: true,
     expiresIn: 15 * 60, // 15 minutes in seconds
     user: { id: user.id, email: user.email, picture: user.picture, name: user.name }
   });
@@ -130,6 +161,15 @@ authRoutes.post('/login', loginLimiter.middleware(), asyncHandler(async (req: Au
 
 authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Response) => {
   const { code, state } = req.query;
+
+  logger.info('OAuth callback received', {
+    hasCode: !!code,
+    hasState: !!state,
+    hasSession: !!req.session,
+    sessionID: req.sessionID,
+    cookies: Object.keys(req.cookies || {}),
+    statePreview: state ? String(state).substring(0, 10) + '...' : 'none'
+  });
 
   if (!code || !state) {
     logger.logSecurity('Google OAuth: Missing code or state', 'high', { hasCode: !!code, hasState: !!state });
@@ -139,8 +179,21 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
 
   // Validate OAuth state parameter (CSRF protection)
   const sessionState = req.session?.oauthState;
+  
+  logger.info('OAuth state validation', {
+    receivedState: String(state).substring(0, 10) + '...',
+    sessionState: sessionState ? sessionState.substring(0, 10) + '...' : 'none',
+    sessionID: req.sessionID,
+    match: sessionState === state
+  });
+  
   if (!sessionState || sessionState !== state) {
-    logger.logSecurity('OAuth callback: Invalid state parameter', 'high', { hasSessionState: !!sessionState });
+    logger.logSecurity('OAuth callback: Invalid state parameter', 'high', { 
+      hasSessionState: !!sessionState,
+      sessionID: req.sessionID,
+      receivedState: String(state).substring(0, 10) + '...',
+      sessionState: sessionState ? sessionState.substring(0, 10) + '...' : 'none'
+    });
     res.status(400).json({ error: 'Invalid OAuth state - possible CSRF attack' });
     return;
   }
@@ -284,10 +337,11 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     );
 
     // Set tokens as HTTP-only cookies (secure, not exposed in URL)
+    const sameSiteValue: 'strict' | 'lax' = isProduction ? 'strict' : 'lax';
     res.cookie('accessToken', tokenPair.accessToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: sameSiteValue,
       maxAge: 15 * 60 * 1000, // 15 minutes
       path: '/',
     });
@@ -295,7 +349,7 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     res.cookie('refreshToken', tokenPair.refreshToken, {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'strict',
+      sameSite: sameSiteValue,
       maxAge: (7 * 24 * 60 * 60 * 1000), // 7 days
       path: '/',
     });
@@ -323,9 +377,26 @@ authRoutes.post('/google/state', asyncHandler(async (req: AuthRequest, res: Resp
   // Store state in session for validation after redirect
   if (req.session) {
     req.session.oauthState = state;
+    
+    // Force session save before responding (critical for OAuth flow)
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          logger.error('Failed to save OAuth state to session', err);
+          reject(err);
+        } else {
+          logger.info('OAuth state saved to session', { 
+            state: state.substring(0, 10) + '...', 
+            sessionID: req.sessionID 
+          });
+          resolve();
+        }
+      });
+    });
+  } else {
+    logger.error('No session available for OAuth state storage');
+    throw new Error('Session not initialized');
   }
-  
-  logger.info('OAuth state generated', { stateLength: state.length });
   
   res.json({ state });
 }));
@@ -713,10 +784,12 @@ authRoutes.post('/refresh', refreshTokenLimiter.middleware(), asyncHandler(async
     const newAccessToken = TokenManager.generateAccessToken(decoded.userId, decoded.email);
 
     // Set new access token as HTTP-only cookie
+    const isProduction = process.env.NODE_ENV === 'production';
+    const sameSiteValue: 'strict' | 'lax' = isProduction ? 'strict' : 'lax';
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: isProduction,
+      sameSite: sameSiteValue,
       maxAge: 15 * 60 * 1000, // 15 minutes
       path: '/',
     });

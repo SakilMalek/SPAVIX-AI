@@ -111,6 +111,7 @@ export default function SignupPage() {
       const response = await fetch(getApiUrl("/api/auth/signup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ email, password, profilePicture: selectedAvatar }),
       });
 
@@ -123,9 +124,11 @@ export default function SignupPage() {
       }
 
       const data = await response.json();
+      console.log('✅ Signup successful, tokens set in HTTP-only cookies');
       toast.success("Account created successfully!");
       
-      // Refresh auth context with new user data (tokens are in HTTP-only cookies)
+      // Tokens are in HTTP-only cookies, no need to store in localStorage
+      // Refresh auth context with new user data
       await refreshAuth();
       setLocation("/dashboard");
     } catch (error: any) {

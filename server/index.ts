@@ -40,6 +40,8 @@ const allowedOrigins = [
   "https://spavix-vision.vercel.app",
   "http://localhost:5000",
   "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5174",
   process.env.FRONTEND_URL, // Allow custom frontend URL via env variable
 ].filter((url): url is string => Boolean(url));
 
@@ -67,6 +69,24 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   } else {
     next();
   }
+});
+
+// Lightweight cookie parser (so req.cookies is available without external dependency)
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  const cookieHeader = req.headers.cookie;
+  const cookies: Record<string, string> = {};
+
+  if (cookieHeader) {
+    for (const part of cookieHeader.split(";")) {
+      const [rawName, ...rawValueParts] = part.trim().split("=");
+      if (!rawName) continue;
+      const rawValue = rawValueParts.join("=");
+      cookies[rawName] = decodeURIComponent(rawValue || "");
+    }
+  }
+
+  (req as any).cookies = cookies;
+  next();
 });
 
 // Stricter rate limiting for authentication endpoints (must be BEFORE general /api limit)
@@ -143,7 +163,7 @@ app.use(
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === "production" ? 'strict' : 'lax',
       maxAge: 24 * 60 * 60 * 1000,
     },
     name: 'sessionId',

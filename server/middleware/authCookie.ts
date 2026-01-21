@@ -27,6 +27,20 @@ export function clearAuthCookie(res: Response) {
     sameSite: 'strict',
     path: '/',
   });
+
+  res.clearCookie('accessToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+  });
+
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+  });
 }
 
 /**

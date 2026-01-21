@@ -68,7 +68,6 @@ interface HistoryResponse {
 }
 
 const fetchTransformations = async (limit: number = 50, offset: number = 0): Promise<Transformation[]> => {
-  const token = localStorage.getItem("token");
   const { getApiUrl } = await import("@/config/api");
   
   const startTime = performance.now();
@@ -77,9 +76,7 @@ const fetchTransformations = async (limit: number = 50, offset: number = 0): Pro
   // First, get all generations (metadata only, no images)
   const fetchStart = performance.now();
   const response = await fetch(getApiUrl(`/api/generations?limit=${limit}&offset=${offset}`), {
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
+    credentials: 'include',
   });
   const fetchDuration = performance.now() - fetchStart;
   console.log(`[HISTORY] Fetch request completed in ${fetchDuration.toFixed(2)}ms`);
@@ -111,12 +108,9 @@ const fetchTransformations = async (limit: number = 50, offset: number = 0): Pro
 };
 
 const fetchProjects = async () => {
-  const token = localStorage.getItem("token");
   const { getApiUrl } = await import("@/config/api");
   const response = await fetch(getApiUrl("/api/projects"), {
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
+    credentials: 'include',
   });
   if (!response.ok) throw new Error("Failed to fetch projects");
   return response.json();
@@ -193,8 +187,6 @@ export default function HistoryPage() {
     const previousData = queryClient.getQueryData(["transformations"]);
     
     try {
-      const token = localStorage.getItem("token");
-      
       // Optimistically update UI immediately
       queryClient.setQueryData(["transformations"], (oldData: any[] | undefined) => {
         if (!oldData) return oldData;
@@ -212,9 +204,9 @@ export default function HistoryPage() {
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl(`/api/generations/${linkTargetId}/project`), {
         method: "PUT",
+        credentials: 'include',
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ projectId: selectedProjectId }),
       });
@@ -261,8 +253,6 @@ export default function HistoryPage() {
     if (!deleteTargetId) return;
 
     try {
-      const token = localStorage.getItem("token");
-      
       // Optimistically update the UI immediately
       setDeleteDialogOpen(false);
       setDeleteTargetId(null);
@@ -279,9 +269,7 @@ export default function HistoryPage() {
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl(`/api/generations/${deleteTargetId}`), {
         method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -330,13 +318,10 @@ export default function HistoryPage() {
 
   const handleShare = async (id: string) => {
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl(`/api/generations/${id}/share`), {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {

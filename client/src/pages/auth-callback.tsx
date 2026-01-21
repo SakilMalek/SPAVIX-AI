@@ -14,16 +14,17 @@ export default function AuthCallbackPage() {
 
     try {
       // Tokens are already set in HTTP-only cookies by the server
-      // No need to extract from URL parameters
-      
-      toast.success("Logged in successfully!");
-      
-      // Get redirect destination or default to dashboard
-      const redirect = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
-      sessionStorage.removeItem('redirectAfterLogin');
-      
-      // Navigate immediately - tokens are in secure cookies
-      setLocation(redirect);
+      // Wait a moment to ensure cookies are properly set before redirecting
+      setTimeout(() => {
+        toast.success("Logged in successfully!");
+        
+        // Get redirect destination or default to dashboard
+        const redirect = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
+        sessionStorage.removeItem('redirectAfterLogin');
+        
+        // Navigate - tokens are in secure cookies
+        setLocation(redirect);
+      }, 500);
     } catch (e) {
       console.error("Error in auth callback:", e);
       setError("Failed to complete authentication. Please try again.");

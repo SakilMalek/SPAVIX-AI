@@ -28,21 +28,20 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
       setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
       // Fetch full subscription data from /api/subscriptions/current
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl('/api/subscriptions/current'), {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          setSubscription(null);
+          setUsage({});
+          setFeatures({});
+          setLoading(false);
+          return;
+        }
         if (response.status === 404) {
           // No subscription yet, this is fine
           setSubscription(null);

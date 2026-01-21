@@ -58,23 +58,18 @@ interface Project {
 }
 
 const fetchProjects = async (): Promise<Project[]> => {
-  const token = localStorage.getItem("token");
   const { getApiUrl } = await import("@/config/api");
   const response = await fetch(getApiUrl("/api/projects"), {
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
+    credentials: 'include',
   });
   if (!response.ok) throw new Error("Failed to fetch projects");
   return response.json();
 };
 
 const fetchProjectTransformations = async (projectId: string): Promise<any[]> => {
-  const token = localStorage.getItem("token");
-  const response = await fetch(`/api/generations/project/${projectId}`, {
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
+  const { getApiUrl } = await import("@/config/api");
+  const response = await fetch(getApiUrl(`/api/generations/project/${projectId}`), {
+    credentials: 'include',
   });
   if (!response.ok) throw new Error("Failed to fetch transformations");
   return response.json();
@@ -380,14 +375,13 @@ export default function ProjectsPage() {
 
     setIsCreating(true);
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl("/api/projects"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: newProjectName,
           description: newProjectDescription,
@@ -418,13 +412,10 @@ export default function ProjectsPage() {
     if (!confirm("Are you sure you want to delete this project?")) return;
 
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl(`/api/projects/${projectId}`), {
         method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -458,14 +449,13 @@ export default function ProjectsPage() {
 
     setIsRenamingProject(true);
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl(`/api/projects/${selectedProjectId}`), {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: renameProjectName,
           description: selectedProject?.description || "",
@@ -496,13 +486,10 @@ export default function ProjectsPage() {
 
     setIsCreatingShare(true);
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl(`/api/projects/${selectedProjectId}/share`), {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -545,14 +532,13 @@ export default function ProjectsPage() {
     setIsSendingMessage(true);
 
     try {
-      const token = localStorage.getItem("token");
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl("/api/chat"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           projectId: selectedProjectId,
           message: userMessage,

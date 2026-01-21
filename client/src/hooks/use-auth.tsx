@@ -93,22 +93,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     const toastId = toast.loading("Logging out...");
-    const token = localStorage.getItem("token");
     
     try {
-      if (token) {
-        const { getApiUrl } = await import("@/config/api");
-        const response = await fetch(getApiUrl("/api/auth/logout"), { 
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-          },
-          credentials: "include",
-        });
-        
-        if (!response.ok) {
-          console.error("Logout API failed:", response.status);
-        }
+      const { getApiUrl } = await import("@/config/api");
+      const response = await fetch(getApiUrl("/api/auth/logout"), { 
+        method: "POST",
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        console.error("Logout API failed:", response.status);
       }
     } catch (error) {
       console.error("Logout failed:", error);

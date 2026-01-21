@@ -25,12 +25,9 @@ import { apiClient } from "@/lib/api-client";
 import { addWatermarkToImage } from "@/lib/watermark";
 
 const fetchProjects = async () => {
-  const token = localStorage.getItem("token");
   const { getApiUrl } = await import("@/config/api");
   const response = await fetch(getApiUrl("/api/projects"), {
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
+    credentials: 'include',
   });
   if (!response.ok) throw new Error("Failed to fetch projects");
   return response.json();

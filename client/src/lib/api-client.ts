@@ -7,7 +7,7 @@ import { getApiUrl } from "@/config/api";
 class ApiClient {
   private static instance: ApiClient;
   private isRefreshing: boolean = false;
-  private refreshPromise: Promise<string> | null = null;
+  private refreshPromise: Promise<void> | null = null;
 
   private constructor() {}
 
@@ -19,9 +19,9 @@ class ApiClient {
   }
 
   /**
-   * Refresh access token using refresh token
+   * Refresh access token using refresh token (HTTP-only cookie based)
    */
-  private async refreshAccessToken(): Promise<string> {
+  private async refreshAccessToken(): Promise<void> {
     // Prevent multiple simultaneous refresh attempts
     if (this.isRefreshing && this.refreshPromise) {
       return this.refreshPromise;
@@ -30,24 +30,15 @@ class ApiClient {
     this.isRefreshing = true;
     this.refreshPromise = (async () => {
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
-        const response = await fetch(getApiUrl('/api/token/refresh'), {
+        const response = await fetch(getApiUrl('/api/auth/refresh'), {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
         });
 
         if (!response.ok) {
           throw new Error('Token refresh failed');
         }
-
-        const data = await response.json();
-        localStorage.setItem('token', data.accessToken);
-        return data.accessToken;
       } catch (error) {
         // Refresh failed - clear auth and redirect
         this.handleUnauthorized();
@@ -64,52 +55,22 @@ class ApiClient {
   /**
    * Make an authenticated API request
    * Automatically handles 401 errors and token expiration with refresh
+   * Uses HTTP-only cookies for authentication
    */
   async fetch(url: string, options: RequestInit = {}, retryCount: number = 0): Promise<Response> {
-    let token = localStorage.getItem("token");
-
-    // Check token expiration before making request
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const expiresIn = (payload.exp * 1000) - Date.now();
-        
-        // If token expires in less than 1 minute, refresh it proactively
-        if (expiresIn < 60000 && expiresIn > 0) {
-          try {
-            token = await this.refreshAccessToken();
-          } catch (error) {
-            console.error('Proactive token refresh failed', error);
-          }
-        } else if (expiresIn <= 0) {
-          // Token already expired, try to refresh
-          try {
-            token = await this.refreshAccessToken();
-          } catch (error) {
-            this.handleUnauthorized();
-            throw new Error('Token expired');
-          }
-        }
-      } catch (e) {
-        console.error('Invalid token format', e);
-        this.handleUnauthorized();
-        throw new Error('Invalid token');
-      }
-    }
-
     const response = await fetch(getApiUrl(url), {
       ...options,
+      credentials: 'include',
       headers: {
         ...options.headers,
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
 
     // Handle 401 Unauthorized - try to refresh token once
     if (response.status === 401 && retryCount === 0) {
       try {
-        const newToken = await this.refreshAccessToken();
-        // Retry the request with new token
+        await this.refreshAccessToken();
+        // Retry the request with refreshed token
         return this.fetch(url, options, retryCount + 1);
       } catch (error) {
         this.handleUnauthorized();

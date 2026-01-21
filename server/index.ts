@@ -17,6 +17,9 @@ const app = express();
 const httpServer = createServer(app);
 const startTime = Date.now();
 
+// CRITICAL: Trust proxy for Render (allows secure cookies behind reverse proxy)
+app.set("trust proxy", 1);
+
 declare module "express-session" {
   interface SessionData {
     userId: string;
@@ -160,13 +163,15 @@ app.use(
     secret: getSessionSecret(),
     resave: false,
     saveUninitialized: false,
+    proxy: process.env.NODE_ENV === "production",
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
     },
-    name: 'sessionId',
+    name: 'spavix.sid',
   }),
 );
 

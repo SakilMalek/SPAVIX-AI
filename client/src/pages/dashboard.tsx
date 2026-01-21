@@ -253,12 +253,9 @@ export default function DashboardPage() {
   // Check if selected project has reached transformation limit
   const checkProjectTransformationLimit = async (projectId: string) => {
     try {
-      const token = localStorage.getItem('token');
       const { getApiUrl } = await import("@/config/api");
       const response = await fetch(getApiUrl(`/api/generations/project/${projectId}`), {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        credentials: 'include',
       });
       
       if (!response.ok) return null;
@@ -332,7 +329,7 @@ export default function DashboardPage() {
     }
     
     try {
-      console.log('Sending generation request with token:', !!localStorage.getItem('token'));
+      console.log('Sending generation request with HTTP-only cookies');
       
       const requestBody: any = {
         imageUrl: uploadedImage,

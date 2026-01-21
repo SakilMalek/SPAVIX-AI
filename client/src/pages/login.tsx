@@ -23,25 +23,39 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   const handleGoogleClick = async () => {
-    // Generate a random state for CSRF protection
-    const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    
-    // Store state in session storage for verification after redirect
-    sessionStorage.setItem('oauth_state', state);
-    
-    // Redirect to Google OAuth endpoint
-    const clientId = "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
-    // Determine redirect URI based on environment
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const redirectUri = isLocalhost 
-      ? 'http://localhost:5000/api/auth/google/callback'
-      : 'https://spavix-ai.onrender.com/api/auth/google/callback';
-    const scope = "openid email profile";
-    const responseType = "code";
-    
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
-    
-    window.location.href = googleAuthUrl;
+    try {
+      const { getApiUrl } = await import("@/config/api");
+      
+      // Request state from server (stored in session)
+      const stateResponse = await fetch(getApiUrl("/api/auth/google/state"), {
+        method: "POST",
+        credentials: "include",
+      });
+      
+      if (!stateResponse.ok) {
+        toast.error("Failed to initialize Google login");
+        return;
+      }
+      
+      const { state } = await stateResponse.json();
+      
+      // Redirect to Google OAuth endpoint
+      const clientId = "972457710378-srvsbk8qqcg98ih8i9m8g73urt9hs8bu.apps.googleusercontent.com";
+      // Determine redirect URI based on environment
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const redirectUri = isLocalhost 
+        ? 'http://localhost:5000/api/auth/google/callback'
+        : 'https://spavix-ai.onrender.com/api/auth/google/callback';
+      const scope = "openid email profile";
+      const responseType = "code";
+      
+      const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+      
+      window.location.href = googleAuthUrl;
+    } catch (error) {
+      console.error("Google login error:", error);
+      toast.error("Failed to start Google login");
+    }
   };
 
   const validateForm = (): boolean => {

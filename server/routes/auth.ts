@@ -315,6 +315,21 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
   }
 }));
 
+// Generate OAuth state for CSRF protection
+authRoutes.post('/google/state', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  // Generate a random state
+  const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  
+  // Store state in session for validation after redirect
+  if (req.session) {
+    req.session.oauthState = state;
+  }
+  
+  logger.info('OAuth state generated', { stateLength: state.length });
+  
+  res.json({ state });
+}));
+
 authRoutes.post('/google', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
   const validated = validateRequest(oauthStateSchema, req.body);
   const { state, email, name, picture } = validated;

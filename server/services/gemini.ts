@@ -114,7 +114,7 @@ Return only the room type word(s). No explanation.`;
     retryCount: number
   ): Promise<Buffer> {
     try {
-      console.log('Using Gemini 2.5 Flash Image (img2img)');
+      console.log('Using Gemini 3 Pro Image (img2img)');
       console.log('Prompt:', prompt);
 
       // Create backend_output directory if it doesn't exist

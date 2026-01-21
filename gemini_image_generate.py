@@ -31,7 +31,7 @@ def generate_image(prompt: str, input_image_path: str, output_path: str):
         
         print(f"[DEBUG] Loaded API key from environment: {api_key[:20]}...", file=sys.stderr)
 
-        print(f"🚀 Using Gemini 2.5 Flash Image Preview with REST API", file=sys.stderr)
+        print(f"🚀 Using Gemini 3 Pro Image with REST API", file=sys.stderr)
         print(f"📝 Prompt: {prompt[:100]}...", file=sys.stderr)
 
         # Load the input image
@@ -84,8 +84,8 @@ def generate_image(prompt: str, input_image_path: str, output_path: str):
         # Call Gemini API via REST
         print(f"⏳ Generating transformed image...", file=sys.stderr)
         
-        # Use gemini-2.5-flash-image-preview for image generation
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key={api_key}"
+        # Use gemini-3-pro-image for image generation
+        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent?key={api_key}"
         
         headers = {
             "Content-Type": "application/json"

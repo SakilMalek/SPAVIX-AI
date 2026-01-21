@@ -115,7 +115,7 @@ generationRoutes.post('/', authMiddleware, checkUsageLimit('transformation'), tr
     const prompt = GeminiImageService.buildPrompt(detectedRoomType, style, materials, finishQuality);
     console.log('Generated prompt length:', prompt.length);
 
-    console.log('🎨 Stage 2: Calling Gemini 2.5 Flash Image (img2img) for transformation...');
+    console.log('🎨 Stage 2: Calling Gemini 3 Pro Image (img2img) for transformation...');
     let imageBuffer: Buffer;
     try {
       imageBuffer = await GeminiImageService.generateImage(prompt, imageUrl);

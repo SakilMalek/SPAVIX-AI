@@ -41,14 +41,11 @@ export function TransformationSlider({ beforeImage, afterImage, generationId, cl
     const loadImages = async () => {
       setIsLoadingImages(true);
       try {
-        const token = localStorage.getItem("token");
         const { getApiUrl } = await import("@/config/api");
         
         console.log(`[TransformationSlider] Loading images for generation ${generationId}`);
         const response = await fetch(getApiUrl(`/api/generations/${generationId}`), {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-          },
+          credentials: 'include',
         });
 
         if (response.ok) {

@@ -5,6 +5,7 @@ services:
     plan: free
     buildCommand: npm run build
     startCommand: npm start
+    healthCheckPath: /api/health/quick
     envVars:
       - key: NODE_ENV
         value: production
@@ -31,6 +32,11 @@ services:
       - key: GOOGLE_REDIRECT_URI
         value: https://spavix-ai.onrender.com/api/auth/google/callback
     autoDeploy: true
+
+  - type: cron
+    name: keep-backend-warm
+    schedule: "*/10 * * * *"
+    command: curl https://spavix-ai.onrender.com/api/health/quick
 
 databases:
   - name: spavix-db

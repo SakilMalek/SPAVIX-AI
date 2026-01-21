@@ -15,6 +15,7 @@ import { subscriptionRoutes } from "./routes/subscriptions.js";
 import subscriptionRouter from "./routes/subscription.routes.js";
 import { stripeWebhookRoutes } from "./routes/stripe-webhook.js";
 import { razorpayWebhookRoutes } from "./routes/razorpay-webhook.js";
+import { healthRoutes } from "./routes/health.js";
 import { Database } from "./db.js";
 import { Router } from "express";
 import { authMiddleware, type AuthRequest } from "./middleware/auth.js";
@@ -27,6 +28,9 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Initialize database
   await Database.initializeDatabase();
+
+  // Register health check routes (must be first for quick response)
+  app.use("/api/health", healthRoutes);
 
   // Register auth routes
   app.use("/api/auth", authRoutes);

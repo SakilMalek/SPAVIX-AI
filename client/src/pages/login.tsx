@@ -107,21 +107,8 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
-      console.log('✅ Login successful, received tokens');
+      console.log('✅ Login successful, tokens set in HTTP-only cookies');
       console.log('📦 Response data:', data);
-      
-      // Store both access and refresh tokens
-      console.log('💾 Storing tokens to localStorage...');
-      localStorage.setItem("token", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
-      console.log('✅ Tokens stored');
-      
-      if (data.user?.picture) {
-        localStorage.setItem("userProfilePicture", data.user.picture);
-      }
-      if (data.user?.name) {
-        localStorage.setItem("userName", data.user.name);
-      }
       
       console.log('🔄 Calling refreshAuth()...');
       toast.success("Logged in successfully!");

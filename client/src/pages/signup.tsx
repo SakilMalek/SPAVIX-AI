@@ -109,18 +109,9 @@ export default function SignupPage() {
       }
 
       const data = await response.json();
-      // Store both access and refresh tokens
-      localStorage.setItem("token", data.accessToken);
-      localStorage.setItem("refreshToken", data.refreshToken);
-      if (data.user?.picture) {
-        localStorage.setItem("userProfilePicture", data.user.picture);
-      }
-      if (data.user?.name) {
-        localStorage.setItem("userName", data.user.name);
-      }
       toast.success("Account created successfully!");
       
-      // Refresh auth context with new user data
+      // Refresh auth context with new user data (tokens are in HTTP-only cookies)
       await refreshAuth();
       setLocation("/dashboard");
     } catch (error: any) {

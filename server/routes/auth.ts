@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js';
 import { emailService } from '../services/email.js';
 import { TokenManager } from '../utils/tokenManager.js';
 import { SubscriptionService } from '../services/subscription.js';
+import { loginLimiter, signupLimiter, forgotPasswordLimiter, refreshTokenLimiter } from '../middleware/rateLimiter.js';
 
 export const authRoutes = Router();
 
@@ -23,7 +24,7 @@ const oauthStateSchema = z.object({
   picture: z.string().url().optional(),
 });
 
-authRoutes.post('/signup', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+authRoutes.post('/signup', signupLimiter.middleware(), asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
   const validated = validateRequest(signupSchema, req.body);
   const { email, password, profilePicture } = validated;
   const rememberMe = req.body.rememberMe === true;
@@ -79,7 +80,7 @@ authRoutes.post('/signup', asyncHandler(async (req: AuthRequest, res: Response):
   });
 }));
 
-authRoutes.post('/login', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+authRoutes.post('/login', loginLimiter.middleware(), asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
   const validated = validateRequest(loginSchema, req.body);
   const { email, password } = validated;
   const rememberMe = req.body.rememberMe === true;
@@ -134,6 +135,19 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     logger.logSecurity('Google OAuth: Missing code or state', 'high', { hasCode: !!code, hasState: !!state });
     res.status(400).json({ error: 'Missing authorization code or state' });
     return;
+  }
+
+  // Validate OAuth state parameter (CSRF protection)
+  const sessionState = req.session?.oauthState;
+  if (!sessionState || sessionState !== state) {
+    logger.logSecurity('OAuth callback: Invalid state parameter', 'high', { hasSessionState: !!sessionState });
+    res.status(400).json({ error: 'Invalid OAuth state - possible CSRF attack' });
+    return;
+  }
+
+  // Clear the state after validation
+  if (req.session) {
+    delete req.session.oauthState;
   }
 
   try {
@@ -269,13 +283,30 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
       req.headers['user-agent']
     );
 
-    // Redirect to frontend with tokens
+    // Set tokens as HTTP-only cookies (secure, not exposed in URL)
+    res.cookie('accessToken', tokenPair.accessToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/',
+    });
+    
+    res.cookie('refreshToken', tokenPair.refreshToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      maxAge: (7 * 24 * 60 * 60 * 1000), // 7 days
+      path: '/',
+    });
+
+    // Redirect to frontend callback without tokens in URL
     const frontendUrl = isProduction 
       ? 'https://spavix-ai.vercel.app'
       : 'http://localhost:5000'; // Vite default port
     
-    const callbackUrl = `${frontendUrl}/auth/callback?accessToken=${tokenPair.accessToken}&refreshToken=${tokenPair.refreshToken}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`;
-    logger.info(`Redirecting to frontend callback: ${callbackUrl}`);
+    const callbackUrl = `${frontendUrl}/auth/callback?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`;
+    logger.info(`Redirecting to frontend callback (tokens in secure cookies)`);
     res.redirect(callbackUrl);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -393,7 +424,7 @@ authRoutes.put('/me', authMiddleware, asyncHandler(async (req: AuthRequest, res:
 }));
 
 // Forgot password route
-authRoutes.post('/forgot-password', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+authRoutes.post('/forgot-password', forgotPasswordLimiter.middleware(), asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
   const { email } = req.body;
 
   if (!email) {
@@ -648,7 +679,49 @@ authRoutes.get('/usage', authMiddleware, asyncHandler(async (req: AuthRequest, r
   });
 }));
 
+authRoutes.post('/refresh', refreshTokenLimiter.middleware(), asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  const refreshToken = req.cookies?.refreshToken;
+  
+  if (!refreshToken) {
+    throw Errors.unauthorized('No refresh token provided');
+  }
+
+  try {
+    // Verify refresh token signature
+    const decoded = TokenManager.verifyToken(refreshToken);
+    
+    if (decoded.type !== 'refresh') {
+      throw Errors.unauthorized('Invalid token type');
+    }
+
+    // Generate new access token
+    const newAccessToken = TokenManager.generateAccessToken(decoded.userId, decoded.email);
+
+    // Set new access token as HTTP-only cookie
+    res.cookie('accessToken', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/',
+    });
+
+    logger.logAuth('Token refreshed successfully', decoded.userId);
+
+    res.json({ success: true, expiresIn: 15 * 60 });
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      throw Errors.unauthorized('Invalid or expired refresh token');
+    }
+    throw error;
+  }
+}));
+
 authRoutes.post('/logout', authMiddleware, asyncHandler(async (req: AuthRequest, res: Response) => {
+  if (req.user) {
+    await Database.revokeAllUserSessions(req.user.id);
+    logger.logAuth('User logout - all sessions revoked', req.user.id);
+  }
   clearAuthCookie(res);
   res.json({ success: true });
 }));

@@ -15,6 +15,7 @@ import { logger } from "./utils/logger";
 
 const app = express();
 const httpServer = createServer(app);
+const startTime = Date.now();
 
 declare module "express-session" {
   interface SessionData {
@@ -201,11 +202,14 @@ app.use((req, res, next) => {
   // Validate required secrets at startup
   validateRequiredSecrets();
 
-  // Start rate limit cleanup
-  startRateLimitCleanup();
-  startSubscriptionRateLimitCleanup();
-
   await registerRoutes(httpServer, app);
+
+  // Defer cleanup jobs to run after server starts (faster cold start)
+  setTimeout(() => {
+    startRateLimitCleanup();
+    startSubscriptionRateLimitCleanup();
+    logger.info('Cleanup jobs started');
+  }, 5000);
 
   // Standardized error handling middleware (must be last)
   app.use(errorHandler);
@@ -232,7 +236,9 @@ app.use((req, res, next) => {
       reusePort: true,
     },
     () => {
+      const duration = Date.now() - startTime;
       log(`serving on port ${port}`);
+      logger.info(`Server started in ${duration}ms (cold start optimization enabled)`);
     },
   );
 })();

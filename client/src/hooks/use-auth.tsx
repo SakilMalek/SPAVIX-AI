@@ -27,46 +27,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const authCheckPromise = useRef<Promise<void> | null>(null);
 
-  const checkAuth = useCallback(async () => {
+  const checkAuth = useCallback(async (): Promise<void> => {
     // Request deduplication - prevent multiple simultaneous auth checks
     if (authCheckPromise.current) {
       return authCheckPromise.current;
     }
 
-    authCheckPromise.current = (async () => {
+    authCheckPromise.current = (async (): Promise<void> => {
       try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          setUser(null);
-          setIsLoading(false);
-          return;
-        }
-
-        // Validate token expiration before API call
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          if (payload.exp && payload.exp * 1000 < Date.now()) {
-            console.log('Token expired, clearing auth');
-            localStorage.clear();
-            sessionStorage.clear();
-            setUser(null);
-            setIsLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.error('Invalid token format', e);
-          localStorage.clear();
-          sessionStorage.clear();
-          setUser(null);
-          setIsLoading(false);
-          return;
-        }
-
         const { getApiUrl } = await import("@/config/api");
+        
+        // Fetch user info using HTTP-only cookies (no token in request needed)
         const response = await fetch(getApiUrl("/api/auth/me"), {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: "include", // Include cookies in request
         });
         
         if (response.ok) {
@@ -80,16 +53,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             subscription_plan: data.subscription_plan || "starter",
             subscription_status: data.subscription_status || "active",
           });
+        } else if (response.status === 401) {
+          // Token expired, try to refresh
+          try {
+            const refreshResponse = await fetch(getApiUrl("/api/auth/refresh"), {
+              method: "POST",
+              credentials: "include",
+            });
+            
+            if (refreshResponse.ok) {
+              // Retry auth check after refresh
+              await checkAuth();
+            } else {
+              // Refresh failed, user not authenticated
+              setUser(null);
+            }
+          } catch (refreshError) {
+            console.error("Token refresh failed:", refreshError);
+            setUser(null);
+          }
         } else {
-          // Token invalid on server
-          localStorage.clear();
-          sessionStorage.clear();
           setUser(null);
         }
       } catch (error) {
         console.error("Auth check failed:", error);
-        localStorage.clear();
-        sessionStorage.clear();
         setUser(null);
       } finally {
         setIsLoading(false);

@@ -14,13 +14,19 @@ export interface AuthRequest extends Request {
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
   try {
+    // Try to get token from Authorization header first (for API calls)
+    let token = '';
     const authHeader = req.headers.authorization;
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    } else if (req.cookies?.accessToken) {
+      // Fall back to HTTP-only cookie (for browser requests)
+      token = req.cookies.accessToken;
+    } else {
       return next(Errors.unauthorized('Missing or invalid authorization header'));
     }
 
-    const token = authHeader.substring(7);
     const secret = getJWTSecret();
 
     const decoded = jwt.verify(token, secret) as { userId: string; email: string };

@@ -10,38 +10,23 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const accessToken = params.get("accessToken");
-    const refreshToken = params.get("refreshToken");
     const email = params.get("email");
-    const name = params.get("name");
-    const picture = params.get("picture");
 
-    if (accessToken && refreshToken) {
-      try {
-        // Store both tokens and user data
-        localStorage.setItem("token", accessToken);
-        localStorage.setItem("refreshToken", refreshToken);
-        if (email) localStorage.setItem("userEmail", email);
-        if (name) localStorage.setItem("userName", name);
-        if (picture) localStorage.setItem("userProfilePicture", picture);
-
-        // Trigger storage event for other tabs
-        window.dispatchEvent(new Event('storage'));
-
-        toast.success("Logged in successfully!");
-        
-        // Get redirect destination or default to dashboard
-        const redirect = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
-        sessionStorage.removeItem('redirectAfterLogin');
-        
-        // Navigate immediately - no timeout needed
-        setLocation(redirect);
-      } catch (e) {
-        console.error("Error in auth callback:", e);
-        setError("Failed to complete authentication. Please try again.");
-      }
-    } else {
-      setError("Authentication failed - no tokens received");
+    try {
+      // Tokens are already set in HTTP-only cookies by the server
+      // No need to extract from URL parameters
+      
+      toast.success("Logged in successfully!");
+      
+      // Get redirect destination or default to dashboard
+      const redirect = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
+      sessionStorage.removeItem('redirectAfterLogin');
+      
+      // Navigate immediately - tokens are in secure cookies
+      setLocation(redirect);
+    } catch (e) {
+      console.error("Error in auth callback:", e);
+      setError("Failed to complete authentication. Please try again.");
     }
   }, [setLocation]);
 

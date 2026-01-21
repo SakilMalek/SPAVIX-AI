@@ -73,11 +73,11 @@ authRoutes.post('/signup', signupLimiter.middleware(), asyncHandler(async (req: 
 
   // Set tokens as HTTP-only cookies
   const isProduction = process.env.NODE_ENV === 'production';
-  const sameSiteValue: 'strict' | 'lax' = isProduction ? 'strict' : 'lax';
+  const sameSiteValue: 'strict' | 'lax' | 'none' = isProduction ? 'none' : 'lax';
   const cookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: sameSiteValue, // Use 'lax' in dev for easier testing
+    sameSite: sameSiteValue, // Use 'none' in production for cross-origin requests (requires secure: true)
     maxAge: 15 * 60 * 1000, // 15 minutes
     path: '/',
   };
@@ -137,11 +137,11 @@ authRoutes.post('/login', loginLimiter.middleware(), asyncHandler(async (req: Au
 
   // Set tokens as HTTP-only cookies
   const isProduction = process.env.NODE_ENV === 'production';
-  const sameSiteValue: 'strict' | 'lax' = isProduction ? 'strict' : 'lax';
+  const sameSiteValue: 'strict' | 'lax' | 'none' = isProduction ? 'none' : 'lax';
   const cookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: sameSiteValue, // Use 'lax' in dev for easier testing
+    sameSite: sameSiteValue, // Use 'none' in production for cross-origin requests (requires secure: true)
     maxAge: 15 * 60 * 1000, // 15 minutes
     path: '/',
   };
@@ -337,7 +337,7 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     );
 
     // Set tokens as HTTP-only cookies (secure, not exposed in URL)
-    const sameSiteValue: 'strict' | 'lax' = isProduction ? 'strict' : 'lax';
+    const sameSiteValue: 'strict' | 'lax' | 'none' = isProduction ? 'none' : 'lax';
     res.cookie('accessToken', tokenPair.accessToken, {
       httpOnly: true,
       secure: isProduction,
@@ -831,7 +831,7 @@ authRoutes.post('/refresh', refreshTokenLimiter.middleware(), asyncHandler(async
 
     // Set new access token as HTTP-only cookie
     const isProduction = process.env.NODE_ENV === 'production';
-    const sameSiteValue: 'strict' | 'lax' = isProduction ? 'strict' : 'lax';
+    const sameSiteValue: 'strict' | 'lax' | 'none' = isProduction ? 'none' : 'lax';
     res.cookie('accessToken', newAccessToken, {
       httpOnly: true,
       secure: isProduction,

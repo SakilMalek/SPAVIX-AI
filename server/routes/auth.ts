@@ -369,7 +369,53 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
   }
 }));
 
-// Generate OAuth state for CSRF protection
+// Server-side OAuth redirect endpoint (fixes cross-domain session issue)
+authRoutes.get('/google/redirect', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  // Generate a random state
+  const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  
+  // Store state in session for validation after redirect
+  if (req.session) {
+    req.session.oauthState = state;
+    
+    // Force session save before redirecting (critical for OAuth flow)
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) {
+          logger.error('Failed to save OAuth state to session', err);
+          reject(err);
+        } else {
+          logger.info('OAuth state saved to session', { 
+            state: state.substring(0, 10) + '...', 
+            sessionID: req.sessionID 
+          });
+          resolve();
+        }
+      });
+    });
+  } else {
+    logger.error('No session available for OAuth state storage');
+    throw new Error('Session not initialized');
+  }
+  
+  // Build Google OAuth URL
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const redirectUri = process.env.NODE_ENV === 'production'
+    ? 'https://spavix-ai.onrender.com/api/auth/google/callback'
+    : 'http://localhost:5000/api/auth/google/callback';
+  
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${googleClientId}&` +
+    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+    `response_type=code&` +
+    `scope=${encodeURIComponent('openid email profile')}&` +
+    `state=${state}`;
+  
+  logger.info('Redirecting to Google OAuth', { sessionID: req.sessionID });
+  res.redirect(googleAuthUrl);
+}));
+
+// Legacy client-side state endpoint (kept for backward compatibility)
 authRoutes.post('/google/state', asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
   // Generate a random state
   const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);

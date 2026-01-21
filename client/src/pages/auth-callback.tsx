@@ -12,23 +12,34 @@ export default function AuthCallbackPage() {
     const params = new URLSearchParams(window.location.search);
     const email = params.get("email");
 
-    try {
-      // Tokens are already set in HTTP-only cookies by the server
-      // Wait a moment to ensure cookies are properly set before redirecting
-      setTimeout(() => {
-        toast.success("Logged in successfully!");
-        
-        // Get redirect destination or default to dashboard
-        const redirect = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
-        sessionStorage.removeItem('redirectAfterLogin');
-        
-        // Navigate - tokens are in secure cookies
-        setLocation(redirect);
-      }, 500);
-    } catch (e) {
-      console.error("Error in auth callback:", e);
-      setError("Failed to complete authentication. Please try again.");
-    }
+    const completeAuth = async () => {
+      try {
+        // Make a request back to the backend to claim the session and get cookies
+        const { getApiUrl } = await import("@/config/api");
+        const response = await fetch(getApiUrl("/api/auth/me"), {
+          credentials: "include", // This will receive the cookies set by the backend
+        });
+
+        if (response.ok) {
+          // Cookies are now set on the frontend domain
+          toast.success("Logged in successfully!");
+          
+          // Get redirect destination or default to dashboard
+          const redirect = sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
+          sessionStorage.removeItem('redirectAfterLogin');
+          
+          // Navigate - tokens are in secure cookies
+          setLocation(redirect);
+        } else {
+          setError("Failed to verify authentication. Please try again.");
+        }
+      } catch (e) {
+        console.error("Error in auth callback:", e);
+        setError("Failed to complete authentication. Please try again.");
+      }
+    };
+
+    completeAuth();
   }, [setLocation]);
 
   if (error) {

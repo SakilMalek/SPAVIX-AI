@@ -361,6 +361,13 @@ authRoutes.get('/google/callback', asyncHandler(async (req: AuthRequest, res: Re
     
     const callbackUrl = `${frontendUrl}/auth/callback?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`;
     logger.info(`Redirecting to frontend callback (tokens in secure cookies)`);
+    // Set a temporary flag in session so frontend can claim the auth
+    if (req.session) {
+      req.session.authComplete = true;
+      req.session.save((err) => {
+        if (err) logger.error('Failed to save auth complete flag', err);
+      });
+    }
     res.redirect(callbackUrl);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

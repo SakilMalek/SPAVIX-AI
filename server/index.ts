@@ -26,6 +26,7 @@ declare module "express-session" {
     username: string;
     profilePicture: string;
     oauthState?: string;
+    authComplete?: boolean;
   }
 }
 

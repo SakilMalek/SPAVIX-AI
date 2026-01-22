@@ -280,16 +280,17 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    const editedImage = localStorage.getItem("editedImage");
+    const editedImage = sessionStorage.getItem("editedImage");
     if (editedImage) {
       setUploadedImage(editedImage);
-      localStorage.removeItem("editedImage");
+      sessionStorage.removeItem("editedImage");
       toast.success("Edited image loaded!");
     }
 
-    const projectId = localStorage.getItem("selectedProjectId");
+    const projectId = sessionStorage.getItem("selectedProjectId");
     if (projectId) {
       setSelectedProjectId(projectId);
+      sessionStorage.removeItem("selectedProjectId");
     }
   }, []);
 

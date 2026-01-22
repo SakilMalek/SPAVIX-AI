@@ -309,7 +309,7 @@ export default function EditorPage() {
                     
                     // Compress to JPEG with low quality to drastically reduce size
                     const compressedImage = canvas.toDataURL("image/jpeg", 0.6);
-                    localStorage.setItem("editedImage", compressedImage);
+                    sessionStorage.setItem("editedImage", compressedImage);
                     window.location.href = "/dashboard";
                   };
                   img.src = image;

@@ -703,7 +703,7 @@ export default function ProjectsPage() {
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                   <button 
                     onClick={() => {
-                      localStorage.setItem('selectedProjectId', selectedProjectId || '');
+                      sessionStorage.setItem('selectedProjectId', selectedProjectId || '');
                       window.location.href = '/dashboard';
                     }}
                     className="aspect-square rounded-xl border-2 border-dashed border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 flex flex-col items-center justify-center gap-2 transition-all group"

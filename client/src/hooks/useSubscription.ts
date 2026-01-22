@@ -71,9 +71,9 @@ export function useUpgradePlan() {
     try {
       const response = await fetch('/api/subscription/upgrade', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify({ plan_slug: planSlug }),
       });
@@ -102,9 +102,9 @@ export function useSelectPlan() {
     try {
       const response = await fetch('/api/subscription/select-plan', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify({ plan_slug: planSlug }),
       });
@@ -133,9 +133,9 @@ export function useCancelSubscription() {
     try {
       const response = await fetch('/api/subscription/cancel', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify({ reason }),
       });
@@ -162,9 +162,9 @@ export function useRecordUsage() {
     try {
       const response = await fetch('/api/usage/record', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify({ feature_key: featureKey, amount }),
       });
@@ -189,9 +189,9 @@ export function useCheckUsage() {
     try {
       const response = await fetch('/api/usage/check', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify({ feature_key: featureKey, amount }),
       });

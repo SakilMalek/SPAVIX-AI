@@ -20,34 +20,47 @@ class EmailService {
     const emailHost = process.env.EMAIL_HOST || 'smtp.gmail.com';
     const emailPort = parseInt(process.env.EMAIL_PORT || '587');
 
+    logger.info('Email service initialization', {
+      hasEmailUser: !!emailUser,
+      hasEmailPassword: !!emailPassword,
+      emailHost,
+      emailPort,
+      nodeEnv: process.env.NODE_ENV,
+    });
+
     if (!emailUser || !emailPassword) {
-      logger.warn('Email service not configured - using test account for development', {
+      logger.error('Email service NOT configured - credentials missing', {
         hasEmailUser: !!emailUser,
         hasEmailPassword: !!emailPassword,
+        emailUserValue: emailUser ? 'SET' : 'MISSING',
+        emailPasswordValue: emailPassword ? 'SET' : 'MISSING',
       });
       
-      // Use Ethereal Email for development/testing
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: 'test@ethereal.email',
-          pass: 'test123456',
-        },
-      });
+      // Don't use fake credentials - just warn and disable email
+      this.transporter = null;
       return;
     }
 
-    this.transporter = nodemailer.createTransport({
-      host: emailHost,
-      port: emailPort,
-      secure: emailPort === 465,
-      auth: {
-        user: emailUser,
-        pass: emailPassword,
-      },
-    });
+    try {
+      this.transporter = nodemailer.createTransport({
+        host: emailHost,
+        port: emailPort,
+        secure: emailPort === 465,
+        auth: {
+          user: emailUser,
+          pass: emailPassword,
+        },
+      });
+      
+      logger.info('Email transporter configured successfully', {
+        host: emailHost,
+        port: emailPort,
+        user: emailUser.substring(0, 5) + '***',
+      });
+    } catch (error) {
+      logger.error('Failed to configure email transporter', error instanceof Error ? error : new Error(String(error)));
+      this.transporter = null;
+    }
   }
 
   async sendPasswordResetEmail(email: string, resetLink: string): Promise<boolean> {

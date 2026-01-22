@@ -32,9 +32,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { getAvatarImage } from "@/config/avatars";
 
 export function Navbar() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const { theme } = useTheme();
   const [location] = useLocation();
+
+  // Don't show user menu on auth pages (login, signup, forgot-password, reset-password)
+  const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/auth-callback'].includes(location);
 
   const logoSrc = theme === "dark" ? "/logo-dark.png" : "/logo-light.png";
 
@@ -89,60 +92,65 @@ export function Navbar() {
         <div className="ml-auto flex items-center space-x-2 md:space-x-4">
           <ThemeToggle />
           
-          <div className="hidden md:block">
-            <UserMenu />
-          </div>
+          {/* Only show user menu when authenticated and not on auth pages */}
+          {user && !isAuthPage && (
+            <>
+              <div className="hidden md:block">
+                <UserMenu />
+              </div>
 
-          {/* Mobile Navigation */}
-          <div className="md:hidden">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-                <SheetHeader className="text-left pb-6">
-                  <SheetTitle className="font-heading flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                    SPAVIX
-                  </SheetTitle>
-                </SheetHeader>
-                <div className="flex flex-col space-y-4">
-                  <div className="flex items-center gap-3 p-2 border rounded-xl bg-muted/30">
-                     <Avatar className="h-10 w-10 overflow-hidden">
-                        <img
-                          src={
-                            !user?.profilePicture 
-                              ? getAvatarImage("avatar-1")
-                              : user.profilePicture.startsWith("http")
-                              ? user.profilePicture
-                              : getAvatarImage(user.profilePicture)
-                          }
-                          alt="User avatar"
-                          className="w-full h-full object-cover"
-                        />
-                     </Avatar>
-                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{user?.username}</p>
-                        <p className="text-xs text-muted-foreground truncate">{user?.email || "User"}</p>
-                     </div>
-                  </div>
+              {/* Mobile Navigation */}
+              <div className="md:hidden">
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                    <SheetHeader className="text-left pb-6">
+                      <SheetTitle className="font-heading flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        SPAVIX
+                      </SheetTitle>
+                    </SheetHeader>
+                    <div className="flex flex-col space-y-4">
+                      <div className="flex items-center gap-3 p-2 border rounded-xl bg-muted/30">
+                         <Avatar className="h-10 w-10 overflow-hidden">
+                            <img
+                              src={
+                                !user?.profilePicture 
+                                  ? getAvatarImage("avatar-1")
+                                  : user.profilePicture.startsWith("http")
+                                  ? user.profilePicture
+                                  : getAvatarImage(user.profilePicture)
+                              }
+                              alt="User avatar"
+                              className="w-full h-full object-cover"
+                            />
+                         </Avatar>
+                         <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate">{user?.username}</p>
+                            <p className="text-xs text-muted-foreground truncate">{user?.email || "User"}</p>
+                         </div>
+                      </div>
 
-                  <nav className="flex flex-col space-y-1">
-                    <MobileNavLink href="/dashboard" isActive={location === '/dashboard'}>Dashboard</MobileNavLink>
-                    <MobileNavLink href="/projects" isActive={location === '/projects'}>Projects</MobileNavLink>
-                    <MobileNavLink href="/gallery" isActive={location === '/gallery'}>Gallery</MobileNavLink>
-                    <MobileNavLink href="/pricing" isActive={location === '/pricing'}>Pricing</MobileNavLink>
-                    <div className="my-2 border-t" />
-                    <MobileNavLink href="/profile" isActive={location === '/profile'}>Profile</MobileNavLink>
-                    <MobileNavLink href="/history" isActive={location === '/history'}>History</MobileNavLink>
-                    <MobileLogoutButton />
-                  </nav>
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+                      <nav className="flex flex-col space-y-1">
+                        <MobileNavLink href="/dashboard" isActive={location === '/dashboard'}>Dashboard</MobileNavLink>
+                        <MobileNavLink href="/projects" isActive={location === '/projects'}>Projects</MobileNavLink>
+                        <MobileNavLink href="/gallery" isActive={location === '/gallery'}>Gallery</MobileNavLink>
+                        <MobileNavLink href="/pricing" isActive={location === '/pricing'}>Pricing</MobileNavLink>
+                        <div className="my-2 border-t" />
+                        <MobileNavLink href="/profile" isActive={location === '/profile'}>Profile</MobileNavLink>
+                        <MobileNavLink href="/history" isActive={location === '/history'}>History</MobileNavLink>
+                        <MobileLogoutButton />
+                      </nav>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </header>

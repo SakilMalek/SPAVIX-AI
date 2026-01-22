@@ -29,7 +29,7 @@ class EmailService {
     });
 
     if (!emailUser || !emailPassword) {
-      logger.error('Email service NOT configured - credentials missing', {
+      logger.error('Email service NOT configured - credentials missing', new Error('Missing email credentials'), {
         hasEmailUser: !!emailUser,
         hasEmailPassword: !!emailPassword,
         emailUserValue: emailUser ? 'SET' : 'MISSING',

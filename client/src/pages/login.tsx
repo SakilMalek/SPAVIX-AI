@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const handleGoogleClick = async () => {
     try {
@@ -65,6 +66,7 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
       setErrors({});
+      setApiError(null);
       const { getApiUrl } = await import("@/config/api");
       const apiUrl = getApiUrl("/api/auth/login");
       console.log('🔐 Attempting login to:', apiUrl);
@@ -92,6 +94,7 @@ export default function LoginPage() {
           console.error('❌ Failed to parse error response:', e);
           errorMessage = `Login failed (${response.status})`;
         }
+        setApiError(errorMessage);
         toast.error(errorMessage);
         setIsLoading(false);
         return;
@@ -152,6 +155,11 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {apiError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-700 font-medium">{apiError}</p>
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Email</label>

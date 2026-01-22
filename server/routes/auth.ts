@@ -595,9 +595,16 @@ authRoutes.post('/forgot-password', forgotPasswordLimiter.middleware(), asyncHan
   const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
 
   // Send email
-  const emailSent = await emailService.sendPasswordResetEmail(email, resetLink);
-
-  logger.info('Password reset token generated and email sent', { email, userId: user.id, emailSent });
+  try {
+    const emailSent = await emailService.sendPasswordResetEmail(email, resetLink);
+    logger.info('Password reset email send attempt', { email, userId: user.id, emailSent, resetLink });
+    
+    if (!emailSent) {
+      logger.warn('Password reset email failed to send', { email, userId: user.id });
+    }
+  } catch (emailError) {
+    logger.error('Password reset email error', emailError instanceof Error ? emailError : new Error(String(emailError)), { email, userId: user.id });
+  }
 
   res.json({ message: 'If an account exists with this email, a password reset link has been sent.' });
 }));

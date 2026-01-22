@@ -94,7 +94,15 @@ export default function SignupPage() {
       if (!response.ok) {
         const error = await response.json();
         console.error('Signup failed:', error);
-        toast.error(error.error || "Signup failed");
+        
+        // Handle specific error cases
+        if (response.status === 409) {
+          toast.error("This email is already registered. Please login or use a different email.");
+        } else if (response.status === 400) {
+          toast.error(error.error || "Invalid input. Please check your details.");
+        } else {
+          toast.error(error.error || "Signup failed. Please try again.");
+        }
         setIsLoading(false);
         return;
       }
@@ -105,8 +113,25 @@ export default function SignupPage() {
       
       // Tokens are in HTTP-only cookies, no need to store in localStorage
       // Refresh auth context with new user data
-      await refreshAuth();
-      setLocation("/dashboard");
+      console.log('🔄 Calling refreshAuth()...');
+      try {
+        await refreshAuth();
+        console.log('✅ refreshAuth() completed');
+      } catch (authError) {
+        console.error('❌ refreshAuth() failed:', authError);
+        throw authError;
+      }
+      
+      // Redirect to dashboard
+      console.log('🔀 Redirecting to dashboard');
+      try {
+        // Use window.location.href for hard redirect to ensure page loads with new auth state
+        window.location.href = '/dashboard';
+        console.log('✅ Redirect initiated');
+      } catch (redirectError) {
+        console.error('❌ Redirect failed:', redirectError);
+        throw redirectError;
+      }
     } catch (error: any) {
       toast.error(error.message || "Signup failed");
     } finally {

@@ -21,9 +21,20 @@ class EmailService {
     const emailPort = parseInt(process.env.EMAIL_PORT || '587');
 
     if (!emailUser || !emailPassword) {
-      logger.warn('Email service not configured - password reset emails will not be sent', {
+      logger.warn('Email service not configured - using test account for development', {
         hasEmailUser: !!emailUser,
         hasEmailPassword: !!emailPassword,
+      });
+      
+      // Use Ethereal Email for development/testing
+      this.transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: 'test@ethereal.email',
+          pass: 'test123456',
+        },
       });
       return;
     }
@@ -65,13 +76,14 @@ class EmailService {
         </div>
       `;
 
-      await this.transporter.sendMail({
+      const info = await this.transporter.sendMail({
+        from: process.env.EMAIL_USER || 'noreply@spavix.ai',
         to: email,
         subject: 'Password Reset Request - SPAVIX',
         html: htmlContent,
       });
 
-      logger.info('Password reset email sent successfully', { email });
+      logger.info('Password reset email sent successfully', { email, messageId: info.messageId, response: info.response });
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
